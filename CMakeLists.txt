@@ -25,6 +25,9 @@ target_include_directories(DistanceUtils PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+target_include_directories(DistanceUtils PRIVATE
+    OpenMP::OpenMP_CXX
+)
 target_compile_options(DistanceUtils PRIVATE -mavx2 -mavx -msse -msse2 -mavx512f -mavx512bw -mavx512dq -fPIC)
 
 file(GLOB_RECURSE SPTAG_HDR_FILES include/Helper/*.h include/Core/*.h)
