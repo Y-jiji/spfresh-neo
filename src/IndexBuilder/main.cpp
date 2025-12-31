@@ -7,7 +7,7 @@
 #include "Helper/SimpleIniReader.h"
 
 #include <memory>
-#include <Core/Common/DistanceUtils.h>
+#include <Utils/DistanceUtils.h>
 
 using namespace SPTAG;
 

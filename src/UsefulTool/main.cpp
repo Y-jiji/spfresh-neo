@@ -3,7 +3,7 @@
 #include <sys/types.h>
 
 #include "Core/Common.h"
-#include "Core/Common/DistanceUtils.h"
+#include "Utils/DistanceUtils.h"
 #include "Core/Common/QueryResultSet.h"
 #include "Core/SPANN/Index.h"
 #include "Helper/VectorSetReader.h"

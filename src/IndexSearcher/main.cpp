@@ -6,7 +6,7 @@
 #include "Helper/CommonHelper.h"
 #include "Helper/StringConvert.h"
 #include "Helper/AsyncFileReader.h"
-#include "Core/Common/CommonUtils.h"
+#include "Utils/CommonUtils.h"
 #include "Core/Common/TruthSet.h"
 #include "Core/Common/QueryResultSet.h"
 #include "Core/VectorIndex.h"

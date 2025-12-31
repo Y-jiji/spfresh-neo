@@ -5,7 +5,7 @@
 #include "Core/VectorIndex.h"
 #include "Core/Common.h"
 #include "Helper/SimpleIniReader.h"
-#include <Core/Common/DistanceUtils.h>
+#include <Utils/DistanceUtils.h>
 #include "Quantizer/Training.h"
 
 #include <memory>

@@ -1,5 +1,5 @@
 #pragma once
-#include <Core/Common/DistanceUtils.h>
+#include <Utils/DistanceUtils.h>
 #include <Core/Common/IQuantizer.h>
 #include <Core/Common/PQQuantizer.h>
 
