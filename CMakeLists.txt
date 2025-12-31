@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.29)
+cmake_minimum_required(VERSION 3.28)
 project(SPFresh LANGUAGES CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(GitProject)
@@ -8,13 +8,15 @@ find_package(MPI REQUIRED)
 find_package(TBB REQUIRED CONFIG)
 find_package(OpenMP REQUIRED)
 find_package(rocksdb REQUIRED)
+find_package(OpenSSL REQUIRED)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-pkg_check_modules(SPDK REQUIRED IMPORTED_TARGET spdk_nvme spdk_event spdk_env_dpdk spdk_bdev spdk_accel spdk_sock_uring)
+pkg_check_modules(SPDK REQUIRED IMPORTED_TARGET spdk_nvme spdk_event spdk_env_dpdk spdk_bdev spdk_accel)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 find_library(ISAL_LIB isal REQUIRED)
 find_library(ISAL_CRYPTO_LIB isal_crypto REQUIRED)
 find_library(URING_LIB uring REQUIRED)
+find_library(UUID_LIB uuid REQUIRED)
 
 file(GLOB UTIL_HDR_FILES include/Utils/*.h)
 file(GLOB UTIL_FILES src/Utils/*.cpp)
@@ -42,6 +44,9 @@ target_link_libraries(SPTAGLib PUBLIC
     ${ISAL_LIB}
     ${ISAL_CRYPTO_LIB}
     ${URING_LIB}
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${UUID_LIB}
     OpenMP::OpenMP_CXX
 )
 
