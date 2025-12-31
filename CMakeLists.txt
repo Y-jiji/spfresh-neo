@@ -7,6 +7,7 @@ find_package(Boost REQUIRED CONFIG)
 find_package(MPI REQUIRED)
 find_package(TBB REQUIRED CONFIG)
 find_package(OpenMP REQUIRED)
+find_package(rocksdb REQUIRED)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 pkg_check_modules(SPDK REQUIRED IMPORTED_TARGET spdk_nvme spdk_event spdk_env_dpdk spdk_bdev spdk_accel spdk_sock_uring)
@@ -92,6 +93,45 @@ file(GLOB QUANTIZER_FILES src/Quantizer/*.cpp)
 add_executable(quantizer ${QUANTIZER_FILES})
 target_link_libraries(quantizer PRIVATE Boost::headers SPTAGLib)
 target_include_directories(quantizer PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+file(GLOB_RECURSE SSD_SERVING_HDR_FILES include/SSDServing/*.h)
+file(GLOB_RECURSE SSD_SERVING_FILES src/SSDServing/*.cpp)
+add_executable(ssdserving ${SSD_SERVING_HDR_FILES} ${SSD_SERVING_FILES})
+target_link_libraries(ssdserving SPTAGLib Boost::headers rocksdb)
+target_compile_definitions(ssdserving PRIVATE _exe)
+target_include_directories(ssdserving PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+file(GLOB_RECURSE SPFRESH_HDR_FILES include/SPFresh/*.h)
+file(GLOB_RECURSE SPFRESH_FILES src/SPFresh/*.cpp)
+add_executable(spfresh ${SPFRESH_HDR_FILES} ${SPFRESH_FILES})
+target_link_libraries(spfresh SPTAGLib Boost::headers rocksdb)
+target_compile_definitions(spfresh PRIVATE _exe)
+target_include_directories(spfresh PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+
+file(GLOB_RECURSE USEFULTOOL_FILES src/UsefulTool/*.cpp)
+add_executable(usefultool ${USEFULTOOL_FILES})
+target_link_libraries(usefultool SPTAGLib Boost::headers rocksdb)
+target_compile_definitions(usefultool PRIVATE _exe)
+target_include_directories(usefultool PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+include_directories (${MPI_CXX_INCLUDE_PATH})
+file(GLOB PARTITION_FILES src/BalancedDataPartition/*.cpp)
+add_executable(balanceddatapartition ${PARTITION_FILES})
+target_link_libraries(balanceddatapartition SPTAGLib Boost::headers ${MPI_CXX_LIBRARIES})
+target_include_directories(balanceddatapartition PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
