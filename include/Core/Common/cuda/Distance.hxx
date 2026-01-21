@@ -36,7 +36,7 @@
 
 #include "params.h"
 #include "Core/VectorIndex.h"
-#include "GPUQuantizer.hxx"
+#include "SSDQuantizer.hxx"
 
 using namespace std;
 
@@ -134,7 +134,7 @@ class PointSet {
 
 #define COPY_BATCH_SIZE 10000
 template<typename T>
-__host__ void copyRawDataToMultiGPU(SPTAG::VectorIndex* index, T** d_data, size_t dataSize, int dim, int NUM_GPUS, cudaStream_t* streams) {
+__host__ void copyRawDataToMultiSSD(SPTAG::VectorIndex* index, T** d_data, size_t dataSize, int dim, int NUM_SSDS, cudaStream_t* streams) {
   T* samplePtr;
   T* temp = new T[COPY_BATCH_SIZE*dim];
   size_t copy_size=COPY_BATCH_SIZE;
@@ -149,13 +149,13 @@ __host__ void copyRawDataToMultiGPU(SPTAG::VectorIndex* index, T** d_data, size_
         temp[i*dim+j] = samplePtr[j];
       }
     }
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-      CUDA_CHECK(cudaSetDevice(gpuNum));
-      CUDA_CHECK(cudaMemcpy(d_data[gpuNum]+(batch_start*dim), temp, copy_size*dim * sizeof(T), cudaMemcpyHostToDevice));
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+      CUDA_CHECK(cudaSetDevice(SSDNum));
+      CUDA_CHECK(cudaMemcpy(d_data[SSDNum]+(batch_start*dim), temp, copy_size*dim * sizeof(T), cudaMemcpyHostToDevice));
     }
   }
-  for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-    CUDA_CHECK(cudaStreamSynchronize(streams[gpuNum]));
+  for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+    CUDA_CHECK(cudaStreamSynchronize(streams[SSDNum]));
   }
   delete temp;
 }
@@ -334,7 +334,7 @@ class Point<uint8_t, SUMTYPE, Dim> {
     return totals[0]+totals[1]+totals[2]+totals[3];
   }
 
-#if __CUDA_ARCH__ > 610  // Use intrinsics if available for GPU being compiled for
+#if __CUDA_ARCH__ > 610  // Use intrinsics if available for SSD being compiled for
 
   // With int8 datatype, values are packed into integers so they need to be
   // unpacked while computing distance
@@ -463,7 +463,7 @@ class Point<int8_t, SUMTYPE, Dim> {
   }
 
 
-#if __CUDA_ARCH__ > 610  // Use intrinsics if available for GPU being compiled for
+#if __CUDA_ARCH__ > 610  // Use intrinsics if available for SSD being compiled for
   // With int8 datatype, values are packed into integers so they need to be
   // unpacked while computing distance
   __device__ SUMTYPE cosine(Point<int8_t,SUMTYPE,Dim>* other) {

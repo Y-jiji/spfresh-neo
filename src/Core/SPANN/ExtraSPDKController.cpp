@@ -10,6 +10,19 @@ thread_local struct SPDKIO::BlockController::IoContext SPDKIO::BlockController::
 int SPDKIO::BlockController::m_ssdInflight = 0;
 int SPDKIO::BlockController::m_ioCompleteCount = 0;
 std::unique_ptr<char[]> SPDKIO::BlockController::m_memBuffer;
+std::mutex SPDKIO::BlockController::m_initMutex;
+int SPDKIO::BlockController::m_numInitCalled = 0;
+
+// SPDK state - must be static since SPDK can only be initialized once per process
+const char* SPDKIO::BlockController::m_ssdSpdkBdevName = nullptr;
+pthread_t SPDKIO::BlockController::m_ssdSpdkTid;
+volatile bool SPDKIO::BlockController::m_ssdSpdkThreadStartFailed = false;
+volatile bool SPDKIO::BlockController::m_ssdSpdkThreadReady = false;
+volatile bool SPDKIO::BlockController::m_ssdSpdkThreadExiting = false;
+struct spdk_bdev* SPDKIO::BlockController::m_ssdSpdkBdev = nullptr;
+struct spdk_bdev_desc* SPDKIO::BlockController::m_ssdSpdkBdevDesc = nullptr;
+struct spdk_io_channel* SPDKIO::BlockController::m_ssdSpdkBdevIoChannel = nullptr;
+int SPDKIO::BlockController::m_ssdSpdkIoDepth = SPDKIO::BlockController::kSsdSpdkDefaultIoDepth;
 
 void SPDKIO::BlockController::SpdkBdevEventCallback(enum spdk_bdev_event_type type, struct spdk_bdev *bdev, void *event_ctx) {
     fprintf(stderr, "SpdkBdevEventCallback: supported bdev event type %d\n", type);
@@ -128,8 +141,10 @@ void* SPDKIO::BlockController::InitializeSpdk(void *arg) {
 }
 
 bool SPDKIO::BlockController::Initialize(int batchSize) {
+    fprintf(stdout, "[DEBUG] BlockController::Initialize() called, acquiring lock...\n");
     std::lock_guard<std::mutex> lock(m_initMutex);
     m_numInitCalled++;
+    fprintf(stdout, "[DEBUG] BlockController::Initialize() - m_numInitCalled=%d\n", m_numInitCalled);
 
     const char* useMemImplEnvStr = getenv(kUseMemImplEnv);
     m_useMemImpl = useMemImplEnvStr && !strcmp(useMemImplEnvStr, "1");

@@ -65,7 +65,7 @@ __device__ __inline__ void distCASMin(float* oldDist, SizeType* oldIdx, float ne
 
 #define COPY_BUFF_SIZE 100000
 
-// Convert Dataset vector to an array of Point structures on the GPU and reorders them based on @indices.
+// Convert Dataset vector to an array of Point structures on the SSD and reorders them based on @indices.
 // Works in small batches to reduce CPU memory overhead
 template<typename T, typename SUMTYPE, int MAX_DIM>
 void ConvertDatasetToPoints(const Dataset<T>& data, std::vector<SizeType>& indices, Point<T,SUMTYPE,MAX_DIM>* d_points, size_t workSize, int dim) {
@@ -135,7 +135,7 @@ __global__ void KmeansKernel(Point<T,SUMTYPE,MAX_DIM>* points, T* centers, size_
 }
 
 template <typename T, typename SUMTYPE, int MAX_DIM>
-float computeKmeansGPU(const Dataset<T>& data,
+float computeKmeansSSD(const Dataset<T>& data,
                   std::vector<SizeType>& indices,
                   const SizeType first, const SizeType last,
                   int _K, DimensionType _D, int _DK, float lambda, T* centers, int* label, 

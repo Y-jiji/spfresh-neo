@@ -15,7 +15,7 @@
 #include <queue>
 #include <atomic>
 
-#if defined(GPU)
+#if defined(SSD)
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -46,11 +46,11 @@ namespace SPTAG
                 m_iCEF(1000),
                 m_iAddCEF(500),
                 m_iMaxCheckForRefineGraph(10000),
-                m_iGPUGraphType(2),
-                m_iGPURefineSteps(0),
-                m_iGPURefineDepth(2),
-                m_iGPULeafSize(500),
-                m_iheadNumGPUs(1),
+                m_iSSDGraphType(2),
+                m_iSSDRefineSteps(0),
+                m_iSSDRefineDepth(2),
+                m_iSSDLeafSize(500),
+                m_iheadNumSSDs(1),
                 m_iTPTBalanceFactor(2),
                 m_rebuild(0)
             {}
@@ -102,7 +102,7 @@ namespace SPTAG
                 return acc;
             }
 
-#if defined(GPU)
+#if defined(SSD)
             template <typename T>
             void BuildInitKNNGraph(VectorIndex* index, const std::unordered_map<SizeType, SizeType>* idmap)
             {
@@ -110,7 +110,7 @@ namespace SPTAG
                 SPTAG::Helper::Convert::ConvertStringTo(index->GetParameter("NumberOfInitialDynamicPivots").c_str(), initSize);
 
                 // Build the entire RNG graph, both builds the KNN and refines it to RNG
-                buildGraph<T>(index, m_iGraphSize, m_iNeighborhoodSize, m_iTPTNumber, (int*)m_pNeighborhoodGraph[0], m_iGPURefineSteps, m_iGPURefineDepth, m_iGPUGraphType, m_iGPULeafSize, initSize, m_iheadNumGPUs, m_iTPTBalanceFactor);
+                buildGraph<T>(index, m_iGraphSize, m_iNeighborhoodSize, m_iTPTNumber, (int*)m_pNeighborhoodGraph[0], m_iSSDRefineSteps, m_iSSDRefineDepth, m_iSSDGraphType, m_iSSDLeafSize, initSize, m_iheadNumSSDs, m_iTPTBalanceFactor);
 
                 if (idmap != nullptr) {
                     std::unordered_map<SizeType, SizeType>::const_iterator iter;
@@ -652,7 +652,7 @@ break;
             int m_iTPTNumber, m_iTPTLeafSize, m_iSamples, m_numTopDimensionTPTSplit;
             DimensionType m_iNeighborhoodSize;
             float m_fNeighborhoodScale, m_fCEFScale, m_fRNGFactor;
-            int m_iRefineIter, m_iCEF, m_iAddCEF, m_iMaxCheckForRefineGraph, m_iGPUGraphType, m_iGPURefineSteps, m_iGPURefineDepth, m_iGPULeafSize, m_iheadNumGPUs, m_iTPTBalanceFactor, m_rebuild;
+            int m_iRefineIter, m_iCEF, m_iAddCEF, m_iMaxCheckForRefineGraph, m_iSSDGraphType, m_iSSDRefineSteps, m_iSSDRefineDepth, m_iSSDLeafSize, m_iheadNumSSDs, m_iTPTBalanceFactor, m_rebuild;
         };
     }
 }

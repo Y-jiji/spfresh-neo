@@ -75,6 +75,7 @@ namespace SPTAG
             inline SizeType GetNumSamples() const { return m_versionMap.Count(); }
             inline DimensionType GetFeatureDim() const { return m_pQuantizer ? m_pQuantizer->ReconstructDim() : m_index->GetFeatureDim(); }
             inline SizeType GetValueSize() const { return m_options.m_dim * sizeof(T); }
+            inline COMMON::VersionLabel& GetVersionMap() { return m_versionMap; }
 
             inline int GetCurrMaxCheck() const { return m_options.m_maxCheck; }
             inline int GetNumThreads() const { return m_options.m_iSSDNumberOfThreads; }

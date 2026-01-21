@@ -49,7 +49,7 @@
     cudaError_t rt = (func);                                                   \
     if (rt != cudaSuccess) {                                                   \
       printf(                                                                  \
-          "GPU API call failure \"" #func "\" with CUDA error %d\n", (int)rt); \
+          "SSD API call failure \"" #func "\" with CUDA error %d\n", (int)rt); \
       throw;                                                                   \
     }                                                                          \
   } while (0)

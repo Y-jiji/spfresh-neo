@@ -22,8 +22,8 @@
  * Licensed under the MIT License.
  */
 
-#ifndef _SPTAG_COMMON_CUDA_GPUKNN_DISTANCE_H_
-#define _SPTAG_COMMON_CUDA_GPUKNN_DISTANCE_H_
+#ifndef _SPTAG_COMMON_CUDA_SSDKNN_DISTANCE_H_
+#define _SPTAG_COMMON_CUDA_SSDKNN_DISTANCE_H_
 
 #include<cuda.h>
 #include<cstdint>
@@ -196,7 +196,7 @@ public:
         return totals[0] + totals[1] + totals[2] + totals[3];
     }
 
-#if __CUDA_ARCH__ > 610  // Use intrinsics if available for GPU being compiled for
+#if __CUDA_ARCH__ > 610  // Use intrinsics if available for SSD being compiled for
 
     // With int8 datatype, values are packed into integers so they need to be
     // unpacked while computing distance
@@ -324,7 +324,7 @@ public:
     }
 
 
-#if __CUDA_ARCH__ > 610  // Use intrinsics if available for GPU being compiled for
+#if __CUDA_ARCH__ > 610  // Use intrinsics if available for SSD being compiled for
     // With int8 datatype, values are packed into integers so they need to be
     // unpacked while computing distance
     __device__ SUMTYPE cosine(Point<int8_t, SUMTYPE, Dim>* other) {

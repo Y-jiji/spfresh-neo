@@ -43,16 +43,16 @@ namespace SPTAG::SPANN
             tbb::concurrent_queue<AddressType> m_blockAddresses;
 
             bool m_useSsdImpl = false;
-            const char* m_ssdSpdkBdevName = nullptr;
-            pthread_t m_ssdSpdkTid;
-            volatile bool m_ssdSpdkThreadStartFailed = false;
-            volatile bool m_ssdSpdkThreadReady = false;
-            volatile bool m_ssdSpdkThreadExiting = false;
-            struct spdk_bdev *m_ssdSpdkBdev = nullptr;
-            struct spdk_bdev_desc *m_ssdSpdkBdevDesc = nullptr;
-            struct spdk_io_channel *m_ssdSpdkBdevIoChannel = nullptr;
+            static const char* m_ssdSpdkBdevName;
+            static pthread_t m_ssdSpdkTid;
+            static volatile bool m_ssdSpdkThreadStartFailed;
+            static volatile bool m_ssdSpdkThreadReady;
+            static volatile bool m_ssdSpdkThreadExiting;
+            static struct spdk_bdev *m_ssdSpdkBdev;
+            static struct spdk_bdev_desc *m_ssdSpdkBdevDesc;
+            static struct spdk_io_channel *m_ssdSpdkBdevIoChannel;
 
-            int m_ssdSpdkIoDepth = kSsdSpdkDefaultIoDepth;
+            static int m_ssdSpdkIoDepth;
             struct SubIoRequest {
                 tbb::concurrent_queue<SubIoRequest *>* completed_sub_io_requests;
                 void* app_buff;
@@ -77,8 +77,8 @@ namespace SPTAG::SPANN
             bool m_useMemImpl = false;
             static std::unique_ptr<char[]> m_memBuffer;
 
-            std::mutex m_initMutex;
-            int m_numInitCalled = 0;
+            static std::mutex m_initMutex;
+            static int m_numInitCalled;
 
             int m_batchSize;
             static int m_ioCompleteCount;
@@ -143,6 +143,7 @@ namespace SPTAG::SPANN
     public:
         SPDKIO(const char* filePath, SizeType blockSize, SizeType capacity, SizeType postingBlocks, SizeType bufferSize = 1024, int batchSize = 64, int compactionThreads = 1)
         {
+            fprintf(stdout, "[DEBUG] SPDKIO constructor called with filePath=%s\n", filePath);
             m_mappingPath = std::string(filePath);
             m_blockLimit = postingBlocks + 1;
             m_bufferLimit = bufferSize;

@@ -105,10 +105,10 @@ namespace SPTAG {
             bool m_preReassign;
             float m_preReassignRatio;
 
-            // GPU building
-            int m_gpuSSDNumTrees;
-            int m_gpuSSDLeafSize;
-            int m_numGPUs;
+            // SSD building
+            int m_SSDSSDNumTrees;
+            int m_SSDSSDLeafSize;
+            int m_numSSDs;
 
             // Searching
             std::string m_searchResult;

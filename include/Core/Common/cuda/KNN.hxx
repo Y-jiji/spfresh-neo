@@ -29,13 +29,13 @@
 #include "log.hxx"
 #include "ThreadHeap.hxx"
 #include "TPtree.hxx"
-#include "GPUQuantizer.hxx"
+#include "SSDQuantizer.hxx"
 
 #include <cuda/std/type_traits>
 #include <chrono>
 
 template<int Dim>
-__device__ void findRNG_PQ(PointSet<uint8_t>* ps, TPtree* tptree, int KVAL, int* results, size_t min_id, size_t max_id, DistPair<float>* threadList, GPU_Quantizer* quantizer) {
+__device__ void findRNG_PQ(PointSet<uint8_t>* ps, TPtree* tptree, int KVAL, int* results, size_t min_id, size_t max_id, DistPair<float>* threadList, SSD_Quantizer* quantizer) {
 
   uint8_t query[Dim];
   uint8_t* candidate_vec;
@@ -269,7 +269,7 @@ __device__ void findRNG(PointSet<T>* ps, TPtree* tptree, int KVAL, int* results,
 #define MAX_SHAPE 1024
 
 template<typename T, typename SUMTYPE, int metric>
-__global__ void findRNG_selector(PointSet<T>* ps, TPtree* tptree, int KVAL, int* results, size_t min_id, size_t max_id, int dim, GPU_Quantizer* quantizer) {
+__global__ void findRNG_selector(PointSet<T>* ps, TPtree* tptree, int KVAL, int* results, size_t min_id, size_t max_id, int dim, SSD_Quantizer* quantizer) {
 
   extern __shared__ char sharememory[];
 
@@ -291,9 +291,9 @@ __global__ void findRNG_selector(PointSet<T>* ps, TPtree* tptree, int KVAL, int*
 
 
 template<typename DTYPE, typename SUMTYPE, int metric>
-void run_TPT_batch_multigpu(size_t dataSize, int** d_results, TPtree** tptrees, TPtree** d_tptrees, int iters, int levels, int NUM_GPUS, int KVAL, cudaStream_t* streams, std::vector<size_t> batch_min, std::vector<size_t> batch_max, int balanceFactor, PointSet<DTYPE>** d_pointset, int dim, GPU_Quantizer* quantizer, SPTAG::VectorIndex* index)
+void run_TPT_batch_multiSSD(size_t dataSize, int** d_results, TPtree** tptrees, TPtree** d_tptrees, int iters, int levels, int NUM_SSDS, int KVAL, cudaStream_t* streams, std::vector<size_t> batch_min, std::vector<size_t> batch_max, int balanceFactor, PointSet<DTYPE>** d_pointset, int dim, SSD_Quantizer* quantizer, SPTAG::VectorIndex* index)
 {
-  // Set num blocks for all GPU kernel calls
+  // Set num blocks for all SSD kernel calls
   int KNN_blocks= max(tptrees[0]->num_leaves, BLOCKS);
 
 
@@ -303,29 +303,29 @@ void run_TPT_batch_multigpu(size_t dataSize, int** d_results, TPtree** tptrees, 
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0)); // Get avil. memory
     size_t freeMem, totalMem;
     CUDA_CHECK(cudaMemGetInfo(&freeMem, &totalMem));
-    LOG(SPTAG::Helper::LogLevel::LL_Debug, "Starting TPtree number %d, Total memory of GPU 0:%ld, GPU 0 memory used:%ld\n", tree_id, totalMem, freeMem);
+    LOG(SPTAG::Helper::LogLevel::LL_Debug, "Starting TPtree number %d, Total memory of SSD 0:%ld, SSD 0 memory used:%ld\n", tree_id, totalMem, freeMem);
 
     auto before_tpt = std::chrono::high_resolution_clock::now(); // Start timer for TPT building
 
-    create_tptree_multigpu<DTYPE>(tptrees, d_pointset, dataSize, levels, NUM_GPUS, streams, balanceFactor, index);
+    create_tptree_multiSSD<DTYPE>(tptrees, d_pointset, dataSize, levels, NUM_SSDS, streams, balanceFactor, index);
     CUDA_CHECK(cudaDeviceSynchronize());
 
-            // Copy TPTs to each GPU
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-      CUDA_CHECK(cudaSetDevice(gpuNum));
-      CUDA_CHECK(cudaMemcpy(d_tptrees[gpuNum], tptrees[gpuNum], sizeof(TPtree), cudaMemcpyHostToDevice));
+            // Copy TPTs to each SSD
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+      CUDA_CHECK(cudaSetDevice(SSDNum));
+      CUDA_CHECK(cudaMemcpy(d_tptrees[SSDNum], tptrees[SSDNum], sizeof(TPtree), cudaMemcpyHostToDevice));
     }
     CUDA_CHECK(cudaDeviceSynchronize());
 
     auto after_tpt = std::chrono::high_resolution_clock::now();
 
-    for(int gpuNum=0; gpuNum < NUM_GPUS; gpuNum++) {
-      CUDA_CHECK(cudaSetDevice(gpuNum));
+    for(int SSDNum=0; SSDNum < NUM_SSDS; SSDNum++) {
+      CUDA_CHECK(cudaSetDevice(SSDNum));
       // Compute the STRICT RNG for each leaf node
       findRNG_selector<DTYPE, SUMTYPE, metric>
                     <<<KNN_blocks,THREADS, sizeof(DistPair<SUMTYPE>)*KVAL*THREADS>>>
-                    (d_pointset[gpuNum], d_tptrees[gpuNum], KVAL, d_results[gpuNum], 
-                    batch_min[gpuNum], batch_max[gpuNum], dim, quantizer);
+                    (d_pointset[SSDNum], d_tptrees[SSDNum], KVAL, d_results[SSDNum], 
+                    batch_min[SSDNum], batch_max[SSDNum], dim, quantizer);
     }
     CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -333,17 +333,17 @@ void run_TPT_batch_multigpu(size_t dataSize, int** d_results, TPtree** tptrees, 
  
     double loop_tpt_time = GET_CHRONO_TIME(before_tpt, after_tpt);
     double loop_work_time = GET_CHRONO_TIME(after_tpt, after_work);
-    LOG(SPTAG::Helper::LogLevel::LL_Debug, "All GPUs finished tree %d - tree build time:%.2lf, neighbor compute time:%.2lf\n", tree_id, loop_tpt_time, loop_work_time);
+    LOG(SPTAG::Helper::LogLevel::LL_Debug, "All SSDs finished tree %d - tree build time:%.2lf, neighbor compute time:%.2lf\n", tree_id, loop_tpt_time, loop_work_time);
 
   } 
 }
 
 /****************************************************************************************
- * Create graph on the GPU in a series of 1 or more batches, graph is saved into @results and is stored on the CPU
+ * Create graph on the SSD in a series of 1 or more batches, graph is saved into @results and is stored on the CPU
  ***************************************************************************************/
 
 template<typename DTYPE, typename SUMTYPE>
-void buildGraphGPU(SPTAG::VectorIndex* index, size_t dataSize, int KVAL, int trees, int* results, int graphtype, int leafSize, int NUM_GPUS, int balanceFactor, size_t* batchSize, size_t* GPUOffset, size_t* resPerGPU, int dim) {
+void buildGraphSSD(SPTAG::VectorIndex* index, size_t dataSize, int KVAL, int trees, int* results, int graphtype, int leafSize, int NUM_SSDS, int balanceFactor, size_t* batchSize, size_t* SSDOffset, size_t* resPerSSD, int dim) {
 
 /**** Variables ****/
   int metric = (int)index->GetDistCalcMethod();
@@ -362,121 +362,121 @@ void buildGraphGPU(SPTAG::VectorIndex* index, size_t dataSize, int KVAL, int tre
   auto start_t = std::chrono::high_resolution_clock::now();
 
   // Host structures 
-  TPtree** tptrees = new TPtree*[NUM_GPUS];
-  std::vector<cudaStream_t> streams(NUM_GPUS);
+  TPtree** tptrees = new TPtree*[NUM_SSDS];
+  std::vector<cudaStream_t> streams(NUM_SSDS);
 
-  // GPU arrays / structures
-  int** d_results = new int*[NUM_GPUS];
-  TPtree** d_tptrees = new TPtree*[NUM_GPUS];
-  DTYPE** d_data_raw = new DTYPE*[NUM_GPUS];
-  PointSet<DTYPE>** d_pointset = new PointSet<DTYPE>*[NUM_GPUS];
+  // SSD arrays / structures
+  int** d_results = new int*[NUM_SSDS];
+  TPtree** d_tptrees = new TPtree*[NUM_SSDS];
+  DTYPE** d_data_raw = new DTYPE*[NUM_SSDS];
+  PointSet<DTYPE>** d_pointset = new PointSet<DTYPE>*[NUM_SSDS];
 
 
 /**** Varibales if PQ is enabled ****/
-  GPU_Quantizer* d_quantizer = NULL;  // Only use if quantizer is enabled
-  GPU_Quantizer* h_quantizer = NULL; 
+  SSD_Quantizer* d_quantizer = NULL;  // Only use if quantizer is enabled
+  SSD_Quantizer* h_quantizer = NULL; 
 
   if(use_q) {
-    h_quantizer = new GPU_Quantizer(index->m_pQuantizer, (DistMetric)metric);
-    CUDA_CHECK(cudaMalloc(&d_quantizer, sizeof(GPU_Quantizer)));
-    CUDA_CHECK(cudaMemcpy(d_quantizer, h_quantizer, sizeof(GPU_Quantizer), cudaMemcpyHostToDevice));
+    h_quantizer = new SSD_Quantizer(index->m_pQuantizer, (DistMetric)metric);
+    CUDA_CHECK(cudaMalloc(&d_quantizer, sizeof(SSD_Quantizer)));
+    CUDA_CHECK(cudaMemcpy(d_quantizer, h_quantizer, sizeof(SSD_Quantizer), cudaMemcpyHostToDevice));
   }
 
-/********* Allocate and transfer data to each GPU ********/
+/********* Allocate and transfer data to each SSD ********/
   // Extract and copy raw data
-  for(int gpuNum=0; gpuNum < NUM_GPUS; gpuNum++) {
-    CUDA_CHECK(cudaSetDevice(gpuNum));
-    CUDA_CHECK(cudaStreamCreate(&streams[gpuNum]));
+  for(int SSDNum=0; SSDNum < NUM_SSDS; SSDNum++) {
+    CUDA_CHECK(cudaSetDevice(SSDNum));
+    CUDA_CHECK(cudaStreamCreate(&streams[SSDNum]));
 
-      LOG(SPTAG::Helper::LogLevel::LL_Debug, "Allocating raw coordinate data on GPU %d, total of %zu bytes\n", gpuNum, rawSize*sizeof(DTYPE));
-      CUDA_CHECK(cudaMalloc(&d_data_raw[gpuNum], rawSize*sizeof(DTYPE)));
+      LOG(SPTAG::Helper::LogLevel::LL_Debug, "Allocating raw coordinate data on SSD %d, total of %zu bytes\n", SSDNum, rawSize*sizeof(DTYPE));
+      CUDA_CHECK(cudaMalloc(&d_data_raw[SSDNum], rawSize*sizeof(DTYPE)));
   }
 
-  copyRawDataToMultiGPU<DTYPE>(index, d_data_raw, dataSize, dim, NUM_GPUS, streams.data());
+  copyRawDataToMultiSSD<DTYPE>(index, d_data_raw, dataSize, dim, NUM_SSDS, streams.data());
 
 
-// Allocate and copy structures ofr each GPU
-  for(int gpuNum=0; gpuNum < NUM_GPUS; gpuNum++) {
-    // Create PointSet structures and copy to each GPU
-    CUDA_CHECK(cudaSetDevice(gpuNum));
-    CUDA_CHECK(cudaMalloc(&d_pointset[gpuNum], sizeof(PointSet<DTYPE>)));
+// Allocate and copy structures ofr each SSD
+  for(int SSDNum=0; SSDNum < NUM_SSDS; SSDNum++) {
+    // Create PointSet structures and copy to each SSD
+    CUDA_CHECK(cudaSetDevice(SSDNum));
+    CUDA_CHECK(cudaMalloc(&d_pointset[SSDNum], sizeof(PointSet<DTYPE>)));
     PointSet<DTYPE> temp_ps;
     temp_ps.dim = dim;
-    temp_ps.data = d_data_raw[gpuNum];
+    temp_ps.data = d_data_raw[SSDNum];
     temp_ps.metric = (DistMetric)metric;
-    CUDA_CHECK(cudaMemcpy(d_pointset[gpuNum], &temp_ps, sizeof(PointSet<DTYPE>), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_pointset[SSDNum], &temp_ps, sizeof(PointSet<DTYPE>), cudaMemcpyHostToDevice));
 
     // Allocate and initialize TPT structures
-    CUDA_CHECK(cudaMalloc(&d_tptrees[gpuNum], sizeof(TPtree)));
-    tptrees[gpuNum] = new TPtree;
+    CUDA_CHECK(cudaMalloc(&d_tptrees[SSDNum], sizeof(TPtree)));
+    tptrees[SSDNum] = new TPtree;
 
-    tptrees[gpuNum]->initialize(dataSize, levels, dim);
+    tptrees[SSDNum]->initialize(dataSize, levels, dim);
     LOG(SPTAG::Helper::LogLevel::LL_Debug, "TPT structure initialized for %lu points, %d levels, leaf size:%d\n", dataSize, levels, leafSize);
 
-    // Allocate results buffer on each GPU
-    CUDA_CHECK(cudaMalloc(&d_results[gpuNum], (size_t)batchSize[gpuNum]*KVAL*sizeof(int)));
+    // Allocate results buffer on each SSD
+    CUDA_CHECK(cudaMalloc(&d_results[SSDNum], (size_t)batchSize[SSDNum]*KVAL*sizeof(int)));
   }
 
-  // Temp variables for running multi-GPU batches 
-  std::vector<size_t> curr_batch_size(NUM_GPUS);
-  std::vector<size_t> batchOffset(NUM_GPUS);
-  std::vector<size_t> batch_min(NUM_GPUS);
-  std::vector<size_t> batch_max(NUM_GPUS);
-  for(int gpuNum=0; gpuNum<NUM_GPUS; ++gpuNum) {
-    batchOffset[gpuNum]=0;
+  // Temp variables for running multi-SSD batches 
+  std::vector<size_t> curr_batch_size(NUM_SSDS);
+  std::vector<size_t> batchOffset(NUM_SSDS);
+  std::vector<size_t> batch_min(NUM_SSDS);
+  std::vector<size_t> batch_max(NUM_SSDS);
+  for(int SSDNum=0; SSDNum<NUM_SSDS; ++SSDNum) {
+    batchOffset[SSDNum]=0;
   }
 
   auto batch_start_t = std::chrono::high_resolution_clock::now();
   prep_time = GET_CHRONO_TIME(start_t, batch_start_t);
 
   bool done = false;
-  while(!done) { // Continue until all GPUs have completed all of their batches
+  while(!done) { // Continue until all SSDs have completed all of their batches
   
-    // Prep next batch for each GPU
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-      curr_batch_size[gpuNum] = batchSize[gpuNum];
+    // Prep next batch for each SSD
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+      curr_batch_size[SSDNum] = batchSize[SSDNum];
      // Check for final batch
-      if(batchOffset[gpuNum]+batchSize[gpuNum] > resPerGPU[gpuNum]) {
-        curr_batch_size[gpuNum] = resPerGPU[gpuNum]-batchOffset[gpuNum];
+      if(batchOffset[SSDNum]+batchSize[SSDNum] > resPerSSD[SSDNum]) {
+        curr_batch_size[SSDNum] = resPerSSD[SSDNum]-batchOffset[SSDNum];
       }
-      batch_min[gpuNum] = GPUOffset[gpuNum]+batchOffset[gpuNum];
-      batch_max[gpuNum] = batch_min[gpuNum] + curr_batch_size[gpuNum];
+      batch_min[SSDNum] = SSDOffset[SSDNum]+batchOffset[SSDNum];
+      batch_max[SSDNum] = batch_min[SSDNum] + curr_batch_size[SSDNum];
 
-      LOG(SPTAG::Helper::LogLevel::LL_Debug, "GPU %d - starting batch with min_id:%ld, max_id:%ld\n", gpuNum, batch_min[gpuNum], batch_max[gpuNum]);
+      LOG(SPTAG::Helper::LogLevel::LL_Debug, "SSD %d - starting batch with min_id:%ld, max_id:%ld\n", SSDNum, batch_min[SSDNum], batch_max[SSDNum]);
 
-      CUDA_CHECK(cudaSetDevice(gpuNum));
+      CUDA_CHECK(cudaSetDevice(SSDNum));
       // Initialize results to all -1 (special value that is set to distance INFTY)
-      CUDA_CHECK(cudaMemset(d_results[gpuNum], -1, (size_t)batchSize[gpuNum]*KVAL*sizeof(int)));
+      CUDA_CHECK(cudaMemset(d_results[SSDNum], -1, (size_t)batchSize[SSDNum]*KVAL*sizeof(int)));
     }
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    /***** Run batch on GPU (all TPT iters) *****/
+    /***** Run batch on SSD (all TPT iters) *****/
     if(metric == (int)DistMetric::Cosine) {
       if(d_quantizer != NULL) {
         LOG(Helper::LogLevel::LL_Error, "Cosine distance not currently supported when using quantization.\n");
         exit(1);
       }
-      run_TPT_batch_multigpu<DTYPE, SUMTYPE, (int)DistMetric::Cosine>(dataSize, d_results, tptrees, d_tptrees, trees, levels, NUM_GPUS, KVAL, streams.data(), batch_min, batch_max, balanceFactor, d_pointset, dim, d_quantizer, index);
+      run_TPT_batch_multiSSD<DTYPE, SUMTYPE, (int)DistMetric::Cosine>(dataSize, d_results, tptrees, d_tptrees, trees, levels, NUM_SSDS, KVAL, streams.data(), batch_min, batch_max, balanceFactor, d_pointset, dim, d_quantizer, index);
     }
     else {
-      run_TPT_batch_multigpu<DTYPE, SUMTYPE, (int)DistMetric::L2>(dataSize, d_results, tptrees, d_tptrees, trees, levels, NUM_GPUS, KVAL, streams.data(), batch_min, batch_max, balanceFactor, d_pointset, dim, d_quantizer, index);
+      run_TPT_batch_multiSSD<DTYPE, SUMTYPE, (int)DistMetric::L2>(dataSize, d_results, tptrees, d_tptrees, trees, levels, NUM_SSDS, KVAL, streams.data(), batch_min, batch_max, balanceFactor, d_pointset, dim, d_quantizer, index);
     }
 
     auto before_copy = std::chrono::high_resolution_clock::now();
-    for(int gpuNum=0; gpuNum < NUM_GPUS; gpuNum++) {
-      CUDA_CHECK(cudaMemcpy(&results[(GPUOffset[gpuNum]+batchOffset[gpuNum])*KVAL], d_results[gpuNum], curr_batch_size[gpuNum]*KVAL*sizeof(int), cudaMemcpyDeviceToHost));
+    for(int SSDNum=0; SSDNum < NUM_SSDS; SSDNum++) {
+      CUDA_CHECK(cudaMemcpy(&results[(SSDOffset[SSDNum]+batchOffset[SSDNum])*KVAL], d_results[SSDNum], curr_batch_size[SSDNum]*KVAL*sizeof(int), cudaMemcpyDeviceToHost));
     }
     auto after_copy = std::chrono::high_resolution_clock::now();
     
     double batch_copy_time = GET_CHRONO_TIME(before_copy, after_copy);
-    LOG(SPTAG::Helper::LogLevel::LL_Debug, "All GPUs finished batch - time to copy result:%.2lf\n", batch_copy_time);
+    LOG(SPTAG::Helper::LogLevel::LL_Debug, "All SSDs finished batch - time to copy result:%.2lf\n", batch_copy_time);
     D2H_time += batch_copy_time;
 
     // Update all batchOffsets and check if done
     done=true;
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-      batchOffset[gpuNum] += curr_batch_size[gpuNum];
-      if(batchOffset[gpuNum] < resPerGPU[gpuNum]) {
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+      batchOffset[SSDNum] += curr_batch_size[SSDNum];
+      if(batchOffset[SSDNum] < resPerSSD[SSDNum]) {
         done=false;
       }
     }
@@ -486,13 +486,13 @@ auto end_t = std::chrono::high_resolution_clock::now();
 
   LOG(SPTAG::Helper::LogLevel::LL_Info, "Total times - prep time:%0.3lf, tree build:%0.3lf, neighbor compute:%0.3lf, Copy results:%0.3lf, Total runtime:%0.3lf\n", prep_time, tree_time, KNN_time, D2H_time, GET_CHRONO_TIME(start_t, end_t));
 
-  for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-    tptrees[gpuNum]->destroy();
-    delete tptrees[gpuNum];
-    CUDA_CHECK(cudaFree(d_tptrees[gpuNum]));
-    CUDA_CHECK(cudaFree(d_results[gpuNum]));
-    CUDA_CHECK(cudaFree(d_data_raw[gpuNum]));
-    CUDA_CHECK(cudaFree(d_pointset[gpuNum]));
+  for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+    tptrees[SSDNum]->destroy();
+    delete tptrees[SSDNum];
+    CUDA_CHECK(cudaFree(d_tptrees[SSDNum]));
+    CUDA_CHECK(cudaFree(d_results[SSDNum]));
+    CUDA_CHECK(cudaFree(d_data_raw[SSDNum]));
+    CUDA_CHECK(cudaFree(d_pointset[SSDNum]));
   }
   delete[] tptrees;
   delete[] d_results;
@@ -508,10 +508,10 @@ auto end_t = std::chrono::high_resolution_clock::now();
 }
 
 /***************************************************************************************
- * Function called by SPTAG to create an initial graph on the GPU.  
+ * Function called by SPTAG to create an initial graph on the SSD.  
  ***************************************************************************************/
 template<typename T>
-void buildGraph(SPTAG::VectorIndex* index, int m_iGraphSize, int m_iNeighborhoodSize, int trees, int* results, int refines, int refineDepth, int graph, int leafSize, int initSize, int NUM_GPUS, int balanceFactor) {
+void buildGraph(SPTAG::VectorIndex* index, int m_iGraphSize, int m_iNeighborhoodSize, int trees, int* results, int refines, int refineDepth, int graph, int leafSize, int initSize, int NUM_SSDS, int balanceFactor) {
 
   int m_disttype = (int)index->GetDistCalcMethod();
   size_t dataSize = (size_t)m_iGraphSize;
@@ -532,25 +532,25 @@ void buildGraph(SPTAG::VectorIndex* index, int m_iGraphSize, int m_iNeighborhood
 ********************************/
   int numDevicesOnHost;
   CUDA_CHECK(cudaGetDeviceCount(&numDevicesOnHost));
-  if(numDevicesOnHost < NUM_GPUS) {
-    LOG(SPTAG::Helper::LogLevel::LL_Error, "HeadNumGPUs parameter %d, but only %d devices available on system.  Exiting.\n", NUM_GPUS, numDevicesOnHost);
+  if(numDevicesOnHost < NUM_SSDS) {
+    LOG(SPTAG::Helper::LogLevel::LL_Error, "HeadNumSSDs parameter %d, but only %d devices available on system.  Exiting.\n", NUM_SSDS, numDevicesOnHost);
     exit(1);
   }
-  LOG(SPTAG::Helper::LogLevel::LL_Info, "Building Head graph with %d GPUs...\n", NUM_GPUS);
-  LOG(SPTAG::Helper::LogLevel::LL_Debug, "Total of %d GPU devices on system, using %d of them.\n", numDevicesOnHost, NUM_GPUS);
+  LOG(SPTAG::Helper::LogLevel::LL_Info, "Building Head graph with %d SSDs...\n", NUM_SSDS);
+  LOG(SPTAG::Helper::LogLevel::LL_Debug, "Total of %d SSD devices on system, using %d of them.\n", numDevicesOnHost, NUM_SSDS);
 
-/**** Compute result batch sizes for each GPU ****/
-  std::vector<size_t> batchSize(NUM_GPUS);
-  std::vector<size_t> resPerGPU(NUM_GPUS);
-  for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-    CUDA_CHECK(cudaSetDevice(gpuNum));
+/**** Compute result batch sizes for each SSD ****/
+  std::vector<size_t> batchSize(NUM_SSDS);
+  std::vector<size_t> resPerSSD(NUM_SSDS);
+  for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+    CUDA_CHECK(cudaSetDevice(SSDNum));
 
-    resPerGPU[gpuNum] = dataSize / NUM_GPUS; // Results per GPU
-    if(dataSize % NUM_GPUS > gpuNum) resPerGPU[gpuNum]++; 
+    resPerSSD[SSDNum] = dataSize / NUM_SSDS; // Results per SSD
+    if(dataSize % NUM_SSDS > SSDNum) resPerSSD[SSDNum]++; 
 
     cudaDeviceProp prop;
-    CUDA_CHECK(cudaGetDeviceProperties(&prop, gpuNum)); // Get avil. memory
-    LOG(SPTAG::Helper::LogLevel::LL_Info, "GPU %d - %s\n", gpuNum, prop.name);
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, SSDNum)); // Get avil. memory
+    LOG(SPTAG::Helper::LogLevel::LL_Info, "SSD %d - %s\n", SSDNum, prop.name);
 
     size_t freeMem, totalMem;
     CUDA_CHECK(cudaMemGetInfo(&freeMem, &totalMem));
@@ -563,32 +563,32 @@ void buildGraph(SPTAG::VectorIndex* index, int m_iGraphSize, int m_iNeighborhood
     resMemAvail = (freeMem*0.9) - (rawDataSize+pointSetSize+treeSize); // Only use 90% of total memory to be safe
     maxEltsPerBatch = resMemAvail / (dim*sizeof(T) + KVAL*sizeof(int));
 
-    batchSize[gpuNum] = std::min(maxEltsPerBatch, resPerGPU[gpuNum]);
+    batchSize[SSDNum] = std::min(maxEltsPerBatch, resPerSSD[SSDNum]);
 
-    LOG(SPTAG::Helper::LogLevel::LL_Debug, "Memory for rawData:%lu MiB, pointSet structure:%lu MiB, Memory for TP trees:%lu MiB, Memory left for results:%lu MiB, total vectors:%lu, batch size:%d, total batches:%d\n", rawSize/1000000, pointSetSize/1000000, treeSize/1000000, resMemAvail/1000000, resPerGPU[gpuNum], batchSize[gpuNum], (((batchSize[gpuNum]-1)+resPerGPU[gpuNum]) / batchSize[gpuNum]));
+    LOG(SPTAG::Helper::LogLevel::LL_Debug, "Memory for rawData:%lu MiB, pointSet structure:%lu MiB, Memory for TP trees:%lu MiB, Memory left for results:%lu MiB, total vectors:%lu, batch size:%d, total batches:%d\n", rawSize/1000000, pointSetSize/1000000, treeSize/1000000, resMemAvail/1000000, resPerSSD[SSDNum], batchSize[SSDNum], (((batchSize[SSDNum]-1)+resPerSSD[SSDNum]) / batchSize[SSDNum]));
 
-  // If GPU memory is insufficient or so limited that we need so many batches it becomes inefficient, return error
-    if(batchSize[gpuNum] == 0 || ((int)resPerGPU[gpuNum]) / batchSize[gpuNum] > 10000) {
-      LOG(SPTAG::Helper::LogLevel::LL_Error, "Insufficient GPU memory to build Head index on GPU %d.  Available GPU memory:%lu MB, Points and tpt require:%lu MB, leaving a maximum batch size of %d results to be computed, which is too small to run efficiently.\n", gpuNum, (freeMem)/1000000, (rawDataSize+pointSetSize+treeSize)/1000000, maxEltsPerBatch);
+  // If SSD memory is insufficient or so limited that we need so many batches it becomes inefficient, return error
+    if(batchSize[SSDNum] == 0 || ((int)resPerSSD[SSDNum]) / batchSize[SSDNum] > 10000) {
+      LOG(SPTAG::Helper::LogLevel::LL_Error, "Insufficient SSD memory to build Head index on SSD %d.  Available SSD memory:%lu MB, Points and tpt require:%lu MB, leaving a maximum batch size of %d results to be computed, which is too small to run efficiently.\n", SSDNum, (freeMem)/1000000, (rawDataSize+pointSetSize+treeSize)/1000000, maxEltsPerBatch);
       exit(1);
     }
   }
-  std::vector<size_t> GPUOffset(NUM_GPUS);
-  GPUOffset[0] = 0;
-  LOG(SPTAG::Helper::LogLevel::LL_Debug, "GPU 0: results:%lu, offset:%lu\n", resPerGPU[0], GPUOffset[0]);
-  for(int gpuNum=1; gpuNum < NUM_GPUS; ++gpuNum) {
-    GPUOffset[gpuNum] = GPUOffset[gpuNum-1] + resPerGPU[gpuNum-1];
-    LOG(SPTAG::Helper::LogLevel::LL_Debug, "GPU %d: results:%lu, offset:%lu\n", gpuNum, resPerGPU[gpuNum], GPUOffset[gpuNum]);
+  std::vector<size_t> SSDOffset(NUM_SSDS);
+  SSDOffset[0] = 0;
+  LOG(SPTAG::Helper::LogLevel::LL_Debug, "SSD 0: results:%lu, offset:%lu\n", resPerSSD[0], SSDOffset[0]);
+  for(int SSDNum=1; SSDNum < NUM_SSDS; ++SSDNum) {
+    SSDOffset[SSDNum] = SSDOffset[SSDNum-1] + resPerSSD[SSDNum-1];
+    LOG(SPTAG::Helper::LogLevel::LL_Debug, "SSD %d: results:%lu, offset:%lu\n", SSDNum, resPerSSD[SSDNum], SSDOffset[SSDNum]);
   }
 
   if(index->m_pQuantizer != NULL) {
-    buildGraphGPU<uint8_t, float>(index, (size_t)m_iGraphSize, KVAL, trees, results, graph, leafSize, NUM_GPUS, balanceFactor, batchSize.data(), GPUOffset.data(), resPerGPU.data(), dim);
+    buildGraphSSD<uint8_t, float>(index, (size_t)m_iGraphSize, KVAL, trees, results, graph, leafSize, NUM_SSDS, balanceFactor, batchSize.data(), SSDOffset.data(), resPerSSD.data(), dim);
   }
   else if(typeid(T) == typeid(float)) {
-          buildGraphGPU<T, float>(index, (size_t)m_iGraphSize, KVAL, trees, results, graph, leafSize, NUM_GPUS, balanceFactor, batchSize.data(), GPUOffset.data(), resPerGPU.data(), dim);
+          buildGraphSSD<T, float>(index, (size_t)m_iGraphSize, KVAL, trees, results, graph, leafSize, NUM_SSDS, balanceFactor, batchSize.data(), SSDOffset.data(), resPerSSD.data(), dim);
   }
   else if(typeid(T) == typeid(uint8_t) || typeid(T) == typeid(int8_t)) {
-          buildGraphGPU<T, int32_t>(index, (size_t)m_iGraphSize, KVAL, trees, results, graph, leafSize, NUM_GPUS, balanceFactor, batchSize.data(), GPUOffset.data(), resPerGPU.data(), dim);
+          buildGraphSSD<T, int32_t>(index, (size_t)m_iGraphSize, KVAL, trees, results, graph, leafSize, NUM_SSDS, balanceFactor, batchSize.data(), SSDOffset.data(), resPerSSD.data(), dim);
   }
   else {
     LOG(SPTAG::Helper::LogLevel::LL_Error, "Selected datatype not currently supported.\n");
@@ -777,14 +777,14 @@ __global__ void query_KNN(Point<DTYPE, SUMTYPE, Dim>* querySet, Point<DTYPE, SUM
 }
 
 template <typename DTYPE, typename SUMTYPE, int MAX_DIM>
-__host__ void GenerateTruthGPUCore(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile,
+__host__ void GenerateTruthSSDCore(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile,
     const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<SPTAG::COMMON::IQuantizer>& quantizer,
     std::vector< std::vector<SPTAG::SizeType> >&truthset, std::vector< std::vector<float> >&distset) {
     int numDevicesOnHost;
     CUDA_CHECK(cudaGetDeviceCount(&numDevicesOnHost));
-    int NUM_GPUS = numDevicesOnHost;
+    int NUM_SSDS = numDevicesOnHost;
     int metric = distMethod == DistCalcMethod::Cosine ? 1 : 0;
-    //const int NUM_GPUS = 4;
+    //const int NUM_SSDS = 4;
 
     std::vector< std::vector<SPTAG::SizeType> > temp_truth = truthset;
     std::vector< std::vector<float> > temp_dist = distset;
@@ -793,51 +793,51 @@ __host__ void GenerateTruthGPUCore(std::shared_ptr<VectorSet> querySet, std::sha
     int vector_size = vectorSet->Count();
     int dim = querySet->Dimension();
     auto vectors = (DTYPE*)vectorSet->GetData();
-    int per_gpu_result = (result_size)*K;
+    int per_SSD_result = (result_size)*K;
 
     LOG_INFO("QueryDatatype: %s, Rows:%ld, Columns:%d\n", (STR(DTYPE)), result_size, dim);
     LOG_INFO("Datatype: %s, Rows:%ld, Columns:%d\n", (STR(DTYPE)), vector_size, dim);
 
-    //Assign vectors to every GPU
-    std::vector<size_t> vectorsPerGPU(NUM_GPUS);
-    for (int gpuNum = 0; gpuNum < NUM_GPUS; ++gpuNum) {
-        vectorsPerGPU[gpuNum] = vector_size / NUM_GPUS;
-        if (vector_size % NUM_GPUS > gpuNum) vectorsPerGPU[gpuNum]++;
+    //Assign vectors to every SSD
+    std::vector<size_t> vectorsPerSSD(NUM_SSDS);
+    for (int SSDNum = 0; SSDNum < NUM_SSDS; ++SSDNum) {
+        vectorsPerSSD[SSDNum] = vector_size / NUM_SSDS;
+        if (vector_size % NUM_SSDS > SSDNum) vectorsPerSSD[SSDNum]++;
     }
-    //record the offset in different GPU
-    std::vector<size_t> GPUOffset(NUM_GPUS);
-    GPUOffset[0] = 0;
-    LOG(SPTAG::Helper::LogLevel::LL_Debug, "GPU 0: results:%lu, offset:%lu\n", vectorsPerGPU[0], GPUOffset[0]);
-    for (int gpuNum = 1; gpuNum < NUM_GPUS; ++gpuNum) {
-        GPUOffset[gpuNum] = GPUOffset[gpuNum - 1] + vectorsPerGPU[gpuNum - 1];
-        LOG(SPTAG::Helper::LogLevel::LL_Debug, "GPU %d: results:%lu, offset:%lu\n", gpuNum, vectorsPerGPU[gpuNum], GPUOffset[gpuNum]);
+    //record the offset in different SSD
+    std::vector<size_t> SSDOffset(NUM_SSDS);
+    SSDOffset[0] = 0;
+    LOG(SPTAG::Helper::LogLevel::LL_Debug, "SSD 0: results:%lu, offset:%lu\n", vectorsPerSSD[0], SSDOffset[0]);
+    for (int SSDNum = 1; SSDNum < NUM_SSDS; ++SSDNum) {
+        SSDOffset[SSDNum] = SSDOffset[SSDNum - 1] + vectorsPerSSD[SSDNum - 1];
+        LOG(SPTAG::Helper::LogLevel::LL_Debug, "SSD %d: results:%lu, offset:%lu\n", SSDNum, vectorsPerSSD[SSDNum], SSDOffset[SSDNum]);
     }
 
-    std::vector<cudaStream_t> streams(NUM_GPUS);
-    std::vector<size_t> batchSize(NUM_GPUS);
+    std::vector<cudaStream_t> streams(NUM_SSDS);
+    std::vector<size_t> batchSize(NUM_SSDS);
 
     cudaError_t resultErr;
     
     //KNN 
     Point<DTYPE, SUMTYPE, MAX_DIM>* points = convertMatrix < DTYPE, SUMTYPE, MAX_DIM >((DTYPE*)querySet->GetData(), result_size, dim);
-    Point<DTYPE, SUMTYPE, MAX_DIM>** d_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_GPUS];
-    Point<DTYPE, SUMTYPE, MAX_DIM>** d_check_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_GPUS];
-    Point<DTYPE, SUMTYPE, MAX_DIM>** sub_vectors_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_GPUS];
-    DistPair<SUMTYPE>** d_results = new DistPair<SUMTYPE>*[NUM_GPUS]; // malloc space for each gpu to save bf result
+    Point<DTYPE, SUMTYPE, MAX_DIM>** d_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_SSDS];
+    Point<DTYPE, SUMTYPE, MAX_DIM>** d_check_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_SSDS];
+    Point<DTYPE, SUMTYPE, MAX_DIM>** sub_vectors_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_SSDS];
+    DistPair<SUMTYPE>** d_results = new DistPair<SUMTYPE>*[NUM_SSDS]; // malloc space for each SSD to save bf result
 
-    //Point<DTYPE, SUMTYPE, MAX_DIM>** d_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_GPUS];
-    //TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>** tptrees = new TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>*[NUM_GPUS];
-    //TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>** d_tptrees = new TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>*[NUM_GPUS];
-    //int** d_results = new int* [NUM_GPUS];
-    // Calculate GPU memory usage on each device
-    for (int gpuNum = 0; gpuNum < NUM_GPUS; gpuNum++) {
-        CUDA_CHECK(cudaSetDevice(gpuNum));
-        CUDA_CHECK(cudaStreamCreate(&streams[gpuNum]));
+    //Point<DTYPE, SUMTYPE, MAX_DIM>** d_points = new Point<DTYPE, SUMTYPE, MAX_DIM>*[NUM_SSDS];
+    //TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>** tptrees = new TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>*[NUM_SSDS];
+    //TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>** d_tptrees = new TPtree<DTYPE, KEYTYPE, SUMTYPE, MAX_DIM>*[NUM_SSDS];
+    //int** d_results = new int* [NUM_SSDS];
+    // Calculate SSD memory usage on each device
+    for (int SSDNum = 0; SSDNum < NUM_SSDS; SSDNum++) {
+        CUDA_CHECK(cudaSetDevice(SSDNum));
+        CUDA_CHECK(cudaStreamCreate(&streams[SSDNum]));
 
         cudaDeviceProp prop;
-        CUDA_CHECK(cudaGetDeviceProperties(&prop, gpuNum));
+        CUDA_CHECK(cudaGetDeviceProperties(&prop, SSDNum));
 
-        LOG(SPTAG::Helper::LogLevel::LL_Info, "GPU %d - %s\n", gpuNum, prop.name);
+        LOG(SPTAG::Helper::LogLevel::LL_Info, "SSD %d - %s\n", SSDNum, prop.name);
 
         size_t freeMem, totalMem;
         CUDA_CHECK(cudaMemGetInfo(&freeMem, &totalMem));
@@ -845,33 +845,33 @@ __host__ void GenerateTruthGPUCore(std::shared_ptr<VectorSet> querySet, std::sha
         size_t queryPointSize = querySet->Count() * sizeof(Point<DTYPE, SUMTYPE, MAX_DIM>);
         size_t resultSetSize = querySet->Count() * K * 4;//size(int) = 4
         size_t resMemAvail = (freeMem * 0.9) - (queryPointSize + resultSetSize); // Only use 90% of total memory to be safe
-        size_t cpuSaveMem = resMemAvail / NUM_GPUS;//using 90% of multi-GPUs might be to much for CPU. 
+        size_t cpuSaveMem = resMemAvail / NUM_SSDS;//using 90% of multi-SSDs might be to much for CPU. 
         int maxEltsPerBatch = cpuSaveMem / (sizeof(Point<DTYPE, SUMTYPE, MAX_DIM>));
-        batchSize[gpuNum] = min(maxEltsPerBatch, (int)(vectorsPerGPU[gpuNum]));
-        // If GPU memory is insufficient or so limited that we need so many batches it becomes inefficient, return error
-        if (batchSize[gpuNum] == 0 || ((int)vectorsPerGPU[gpuNum]) / batchSize[gpuNum] > 10000) {
-            LOG(SPTAG::Helper::LogLevel::LL_Error, "Insufficient GPU memory to build Head index on GPU %d.  Available GPU memory:%lu MB, Points and resultsSet require: %lu MB, leaving a maximum batch size of %d results to be computed, which is too small to run efficiently.\n", gpuNum, (freeMem) / 1000000, (queryPointSize + resultSetSize) / 1000000, maxEltsPerBatch);
+        batchSize[SSDNum] = min(maxEltsPerBatch, (int)(vectorsPerSSD[SSDNum]));
+        // If SSD memory is insufficient or so limited that we need so many batches it becomes inefficient, return error
+        if (batchSize[SSDNum] == 0 || ((int)vectorsPerSSD[SSDNum]) / batchSize[SSDNum] > 10000) {
+            LOG(SPTAG::Helper::LogLevel::LL_Error, "Insufficient SSD memory to build Head index on SSD %d.  Available SSD memory:%lu MB, Points and resultsSet require: %lu MB, leaving a maximum batch size of %d results to be computed, which is too small to run efficiently.\n", SSDNum, (freeMem) / 1000000, (queryPointSize + resultSetSize) / 1000000, maxEltsPerBatch);
             exit(1);
         }
 
-        size_t total_batches = ((batchSize[gpuNum] - 1) + vectorsPerGPU[gpuNum]) / batchSize[gpuNum];
-        LOG(SPTAG::Helper::LogLevel::LL_Info, "Memory for  query Points vectors:%lu MiB, Memory for resultSet:%lu MiB, Memory left for vectors:%lu MiB, total vectors:%lu, batch size:%d, total batches:%lu\n", queryPointSize / 1000000, resultSetSize / 1000000, resMemAvail / 1000000, vectorsPerGPU[gpuNum], batchSize[gpuNum], total_batches);
+        size_t total_batches = ((batchSize[SSDNum] - 1) + vectorsPerSSD[SSDNum]) / batchSize[SSDNum];
+        LOG(SPTAG::Helper::LogLevel::LL_Info, "Memory for  query Points vectors:%lu MiB, Memory for resultSet:%lu MiB, Memory left for vectors:%lu MiB, total vectors:%lu, batch size:%d, total batches:%lu\n", queryPointSize / 1000000, resultSetSize / 1000000, resMemAvail / 1000000, vectorsPerSSD[SSDNum], batchSize[SSDNum], total_batches);
 
     }
 
     int KNN_blocks = querySet->Count() / KNN_THREADS;
-    std::vector<size_t> curr_batch_size(NUM_GPUS);
-    std::vector<size_t> batchOffset(NUM_GPUS);
-    for (int gpuNum = 0; gpuNum < NUM_GPUS; ++gpuNum) {
-        batchOffset[gpuNum] = 0;
+    std::vector<size_t> curr_batch_size(NUM_SSDS);
+    std::vector<size_t> batchOffset(NUM_SSDS);
+    for (int SSDNum = 0; SSDNum < NUM_SSDS; ++SSDNum) {
+        batchOffset[SSDNum] = 0;
     }
 
-    // Allocate space on gpu
-    for (int i = 0; i < NUM_GPUS; i++) {
+    // Allocate space on SSD
+    for (int i = 0; i < NUM_SSDS; i++) {
         cudaSetDevice(i);
-        cudaStreamCreate(&streams[i]); // Copy data over on a separate stream for each GPU
-        // Device result memory on each GPU
-        CUDA_CHECK(cudaMalloc(&d_results[i], per_gpu_result * sizeof(DistPair<SUMTYPE>)));
+        cudaStreamCreate(&streams[i]); // Copy data over on a separate stream for each SSD
+        // Device result memory on each SSD
+        CUDA_CHECK(cudaMalloc(&d_results[i], per_SSD_result * sizeof(DistPair<SUMTYPE>)));
         
         //Copy Queryvectors
         CUDA_CHECK(cudaMalloc(&d_points[i], querySet->Count() * sizeof(Point<DTYPE, SUMTYPE, MAX_DIM>)));
@@ -887,31 +887,31 @@ __host__ void GenerateTruthGPUCore(std::shared_ptr<VectorSet> querySet, std::sha
     //RN, The querys are copied, and the space for result are malloced. 
     // Need to copy the result, and copy back to host to update. 
     // The vectors split, malloc, copy neeed to be done in here.
-    while (!done) { // Continue until all GPUs have completed all of their batches
+    while (!done) { // Continue until all SSDs have completed all of their batches
         size_t freeMem, totalMem;
         CUDA_CHECK(cudaMemGetInfo(&freeMem, &totalMem));
-        LOG(SPTAG::Helper::LogLevel::LL_Debug, "Avaliable Memory out of %lu MiB total Memory for GPU 0 is %lu MiB\n", totalMem / 1000000, freeMem / 1000000);
+        LOG(SPTAG::Helper::LogLevel::LL_Debug, "Avaliable Memory out of %lu MiB total Memory for SSD 0 is %lu MiB\n", totalMem / 1000000, freeMem / 1000000);
 
-    // Prep next batch for each GPU
-        for (int gpuNum = 0; gpuNum < NUM_GPUS; ++gpuNum) {
-            curr_batch_size[gpuNum] = batchSize[gpuNum];
+    // Prep next batch for each SSD
+        for (int SSDNum = 0; SSDNum < NUM_SSDS; ++SSDNum) {
+            curr_batch_size[SSDNum] = batchSize[SSDNum];
             // Check if final batch is smaller than previous
-            if (batchOffset[gpuNum] + batchSize[gpuNum] > vectorsPerGPU[gpuNum]) {
-                curr_batch_size[gpuNum] = vectorsPerGPU[gpuNum] - batchOffset[gpuNum];
+            if (batchOffset[SSDNum] + batchSize[SSDNum] > vectorsPerSSD[SSDNum]) {
+                curr_batch_size[SSDNum] = vectorsPerSSD[SSDNum] - batchOffset[SSDNum];
             }
-            LOG(SPTAG::Helper::LogLevel::LL_Info, "GPU %d - starting batch with offset:%lu, with GPU offset:%lu, size:%lu, TailRows:%lld\n", gpuNum, batchOffset[gpuNum], GPUOffset[gpuNum], curr_batch_size[gpuNum], vectorsPerGPU[gpuNum] -batchOffset[gpuNum]);
+            LOG(SPTAG::Helper::LogLevel::LL_Info, "SSD %d - starting batch with offset:%lu, with SSD offset:%lu, size:%lu, TailRows:%lld\n", SSDNum, batchOffset[SSDNum], SSDOffset[SSDNum], curr_batch_size[SSDNum], vectorsPerSSD[SSDNum] -batchOffset[SSDNum]);
         }
 
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        for (int i = 0; i < NUM_GPUS; i++) {
+        for (int i = 0; i < NUM_SSDS; i++) {
             CUDA_CHECK(cudaSetDevice(i));
             
-            size_t start = GPUOffset[i] + batchOffset[i];
+            size_t start = SSDOffset[i] + batchOffset[i];
             sub_vectors_points[i] = convertMatrix < DTYPE, SUMTYPE, MAX_DIM >(&vectors[start * dim], curr_batch_size[i], dim);
             CUDA_CHECK(cudaMemcpyAsync(d_check_points[i], sub_vectors_points[i], curr_batch_size[i] * sizeof(Point<DTYPE, SUMTYPE, MAX_DIM>), cudaMemcpyHostToDevice, streams[i]));
             
-            // Perfrom brute-force KNN from the subsets assigned to the GPU for the querySets
+            // Perfrom brute-force KNN from the subsets assigned to the SSD for the querySets
             int KNN_blocks = (KNN_THREADS - 1 + querySet->Count()) / KNN_THREADS;
             size_t dynamicSharedMem = KNN_THREADS * sizeof(DistPair < SUMTYPE>) * (K - 1); 
             //64*9*8=4608 for K=10 , KNN_Threads = 64
@@ -929,39 +929,39 @@ __host__ void GenerateTruthGPUCore(std::shared_ptr<VectorSet> querySet, std::sha
         }
         
         //Copy back to result
-        for (int gpuNum = 0; gpuNum < NUM_GPUS; gpuNum++) {
-            cudaSetDevice(gpuNum);
+        for (int SSDNum = 0; SSDNum < NUM_SSDS; SSDNum++) {
+            cudaSetDevice(SSDNum);
             cudaDeviceSynchronize();
         }
-        DistPair<SUMTYPE>* results = (DistPair<SUMTYPE>*)malloc(per_gpu_result * sizeof(DistPair<SUMTYPE>) * NUM_GPUS);
-        for (int gpuNum = 0; gpuNum < NUM_GPUS; gpuNum++) {
-            cudaMemcpy(&results[(gpuNum * per_gpu_result)], d_results[gpuNum], per_gpu_result * sizeof(DistPair<SUMTYPE>), cudaMemcpyDeviceToHost);
+        DistPair<SUMTYPE>* results = (DistPair<SUMTYPE>*)malloc(per_SSD_result * sizeof(DistPair<SUMTYPE>) * NUM_SSDS);
+        for (int SSDNum = 0; SSDNum < NUM_SSDS; SSDNum++) {
+            cudaMemcpy(&results[(SSDNum * per_SSD_result)], d_results[SSDNum], per_SSD_result * sizeof(DistPair<SUMTYPE>), cudaMemcpyDeviceToHost);
         }
 
-        // To combine the results, we need to compare value from different GPU 
-        //Results [KNN from GPU0][KNN from GPU1][KNN from GPU2][KNN from GPU3]
+        // To combine the results, we need to compare value from different SSD 
+        //Results [KNN from SSD0][KNN from SSD1][KNN from SSD2][KNN from SSD3]
         // Every block will be [result_size*K] [K|K|K|...|K]
         // The real KNN is selected from 4*KNN
-        size_t* reader_ptrs = (size_t*)malloc(NUM_GPUS * sizeof(size_t));
+        size_t* reader_ptrs = (size_t*)malloc(NUM_SSDS * sizeof(size_t));
         for (size_t i = 0; i < result_size; i++) {
             //For each result, there should be writer pointer, four reader pointers
-            // reader ptr is assigned to i+gpu_idx*(result_size*K)/4
-            for (size_t gpu_idx = 0; gpu_idx < NUM_GPUS; gpu_idx++) {
-                reader_ptrs[gpu_idx] = i * K + gpu_idx * (result_size * K);
+            // reader ptr is assigned to i+SSD_idx*(result_size*K)/4
+            for (size_t SSD_idx = 0; SSD_idx < NUM_SSDS; SSD_idx++) {
+                reader_ptrs[SSD_idx] = i * K + SSD_idx * (result_size * K);
             }
             for (size_t writer_ptr = i * K; writer_ptr < (i + 1) * K; writer_ptr++) {
                 int selected = 0;
-                for (size_t gpu_idx = 1; gpu_idx < NUM_GPUS; gpu_idx++) {
-                    //if the other gpu has shorter dist
-                    if (results[reader_ptrs[selected]].dist > results[reader_ptrs[gpu_idx]].dist) {
-                        selected = gpu_idx;
+                for (size_t SSD_idx = 1; SSD_idx < NUM_SSDS; SSD_idx++) {
+                    //if the other SSD has shorter dist
+                    if (results[reader_ptrs[selected]].dist > results[reader_ptrs[SSD_idx]].dist) {
+                        selected = SSD_idx;
                     }
                 }
                 temp_truth[i][writer_ptr - (i * K)] = results[reader_ptrs[selected]].idx;
                 temp_dist[i][writer_ptr - (i * K)] = results[reader_ptrs[selected]++].dist;
             }
         }
-        LOG(SPTAG::Helper::LogLevel::LL_Info, "Collected all the result from GPUs.\n");
+        LOG(SPTAG::Helper::LogLevel::LL_Info, "Collected all the result from SSDs.\n");
         //update results, just assign to truthset for first batch
         if (update) {
             updateKNNResults(truthset, distset, temp_truth, temp_dist, result_size, K);
@@ -974,84 +974,84 @@ __host__ void GenerateTruthGPUCore(std::shared_ptr<VectorSet> querySet, std::sha
         LOG(SPTAG::Helper::LogLevel::LL_Info, "Updated batch result.\n");
         // Update all batchOffsets and check if done
         done = true;
-        for (int gpuNum = 0; gpuNum < NUM_GPUS; ++gpuNum) {
-            batchOffset[gpuNum] += curr_batch_size[gpuNum];
-            if (batchOffset[gpuNum] < vectorsPerGPU[gpuNum]) {
+        for (int SSDNum = 0; SSDNum < NUM_SSDS; ++SSDNum) {
+            batchOffset[SSDNum] += curr_batch_size[SSDNum];
+            if (batchOffset[SSDNum] < vectorsPerSSD[SSDNum]) {
                 done = false;
             }
             //avoid memory leak
-            free(sub_vectors_points[gpuNum]);
+            free(sub_vectors_points[SSDNum]);
         }
         free(results);
     } // Batches loop (while !done) 
 
     auto t2 = std::chrono::high_resolution_clock::now();
-    double gpuRunTime = std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count();
-    double gpuRunTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    double SSDRunTime = std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count();
+    double SSDRunTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
 
-    LOG_ALL("Total GPU time (sec): %ld.%ld\n", (int)gpuRunTime, (((int)gpuRunTimeMs)%1000));
+    LOG_ALL("Total SSD time (sec): %ld.%ld\n", (int)SSDRunTime, (((int)SSDRunTimeMs)%1000));
 }
 
 template <typename T>
-void GenerateTruthGPU(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile,
+void GenerateTruthSSD(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile,
     const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<SPTAG::COMMON::IQuantizer>& quantizer,
     std::vector< std::vector<SPTAG::SizeType> > &truthset, std::vector< std::vector<float> > &distset) {
     using SUMTYPE = std::conditional_t<std::is_same<T, float>::value, float, int32_t>;
     int m_iFeatureDim = querySet->Dimension();
     if (typeid(T) == typeid(float)) {
         if (m_iFeatureDim <= 64) {
-            GenerateTruthGPUCore<T, float, 64>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, float, 64>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 100) {
-            GenerateTruthGPUCore<T, float, 100>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, float, 100>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 128) {
-            GenerateTruthGPUCore<T, float, 128>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, float, 128>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 184) {
-            GenerateTruthGPUCore<T, float, 184>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, float, 184>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 384) {
-            GenerateTruthGPUCore<T, float, 384>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, float, 384>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 768) {
-            GenerateTruthGPUCore<T, float, 768>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, float, 768>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         //else if (m_iFeatureDim <= 1024) {
-        //    GenerateTruthGPUCore<T, SUMTYPE, 1024>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+        //    GenerateTruthSSDCore<T, SUMTYPE, 1024>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         //}
         //else if (m_iFeatureDim <= 2048) {
-        //    GenerateTruthGPUCore<T, SUMTYPE, 2048>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+        //    GenerateTruthSSDCore<T, SUMTYPE, 2048>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         //}
         //else if (m_iFeatureDim <= 4096) {
-        //    GenerateTruthGPUCore<T, SUMTYPE, 4096>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+        //    GenerateTruthSSDCore<T, SUMTYPE, 4096>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         //}
         else {
-            LOG(SPTAG::Helper::LogLevel::LL_Error, "%d dimensions not currently supported for GPU generate Truth.\n");
+            LOG(SPTAG::Helper::LogLevel::LL_Error, "%d dimensions not currently supported for SSD generate Truth.\n");
             exit(1);
         }
     }
     else if (typeid(T) == typeid(uint8_t) || typeid(T) == typeid(int8_t)) {
         if (m_iFeatureDim <= 64) {
-            GenerateTruthGPUCore<T, int32_t, 64>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, int32_t, 64>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 100) {
-            GenerateTruthGPUCore<T, int32_t, 100>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, int32_t, 100>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 128) {
-            GenerateTruthGPUCore<T, int32_t, 128>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, int32_t, 128>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 184) {
-            GenerateTruthGPUCore<T, int32_t, 184>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, int32_t, 184>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 384) {
-            GenerateTruthGPUCore<T, int32_t, 384>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, int32_t, 384>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else if (m_iFeatureDim <= 768) {
-            GenerateTruthGPUCore<T, int32_t, 768>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSDCore<T, int32_t, 768>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
         }
         else {
-            LOG(SPTAG::Helper::LogLevel::LL_Error, "%d dimensions not currently supported for GPU generate Truth.\n");
+            LOG(SPTAG::Helper::LogLevel::LL_Error, "%d dimensions not currently supported for SSD generate Truth.\n");
             exit(1);
         }
     }
@@ -1060,7 +1060,7 @@ void GenerateTruthGPU(std::shared_ptr<VectorSet> querySet, std::shared_ptr<Vecto
         exit(1);
     }
 }
-#define DefineVectorValueType(Name, Type) template void GenerateTruthGPU<Type>(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile, const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<SPTAG::COMMON::IQuantizer>& quantizer, std::vector< std::vector<SPTAG::SizeType> > &truthset, std::vector< std::vector<float> > &distset);
+#define DefineVectorValueType(Name, Type) template void GenerateTruthSSD<Type>(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile, const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<SPTAG::COMMON::IQuantizer>& quantizer, std::vector< std::vector<SPTAG::SizeType> > &truthset, std::vector< std::vector<float> > &distset);
 #include "Core/DefinitionList.h"
 #undef DefineVectorValueType
 

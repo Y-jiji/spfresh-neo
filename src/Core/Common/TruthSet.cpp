@@ -5,7 +5,7 @@
 #include "Core/VectorIndex.h"
 #include "Core/Common/QueryResultSet.h"
 
-#if defined(GPU)
+#if defined(SSD)
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -20,7 +20,7 @@ namespace SPTAG
 {
     namespace COMMON
     {
-#if defined(GPU)
+#if defined(SSD)
         template<typename T>
         void TruthSet::GenerateTruth(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile,
             const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<IQuantizer>& quantizer) {
@@ -34,7 +34,7 @@ namespace SPTAG
             std::vector< std::vector<SPTAG::SizeType> > truthset(querySet->Count(), std::vector<SPTAG::SizeType>(K, 0));
             std::vector< std::vector<float> > distset(querySet->Count(), std::vector<float>(K, 0));
 
-            GenerateTruthGPU<T>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
+            GenerateTruthSSD<T>(querySet, vectorSet, truthFile, distMethod, K, p_truthFileType, quantizer, truthset, distset);
 
             LOG(Helper::LogLevel::LL_Info, "Start to write truth file...\n");
             writeTruthFile(truthFile, querySet->Count(), K, truthset, distset, p_truthFileType);
@@ -124,7 +124,7 @@ namespace SPTAG
             }
         }
 
-#endif // (GPU)
+#endif // (SSD)
 
 #define DefineVectorValueType(Name, Type) template void TruthSet::GenerateTruth<Type>(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile, const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<IQuantizer>& quantizer);
 #include "Core/DefinitionList.h"

@@ -12,6 +12,12 @@ find_package(OpenSSL REQUIRED)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 pkg_check_modules(SPDK REQUIRED IMPORTED_TARGET spdk_nvme spdk_event spdk_env_dpdk spdk_bdev spdk_accel)
+
+# CRITICAL FIX: DPDK PMD plugins cause "tailq already registered" crash
+# The SPDK pkg-config incorrectly includes PMD plugins as direct link dependencies
+# PMDs (bus drivers, mempools, power) must ONLY be loaded dynamically, not linked
+# We keep the filter commented for now - the real fix is upstream in SPDK/DPDK build
+
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 find_library(ISAL_LIB isal REQUIRED)
 find_library(ISAL_CRYPTO_LIB isal_crypto REQUIRED)

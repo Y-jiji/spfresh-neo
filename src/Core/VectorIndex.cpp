@@ -808,26 +808,26 @@ std::uint64_t VectorIndex::EstimatedMemoryUsage(std::uint64_t p_vectorCount, Dim
 
 
 
-#if defined(GPU)
+#if defined(SSD)
 
 #include "Core/Common/cuda/TailNeighbors.hxx"
 
 void VectorIndex::SortSelections(std::vector<Edge>* selections) {
-  LOG(Helper::LogLevel::LL_Debug, "Starting sort of final input on GPU\n");
-  GPU_SortSelections(selections);
+  LOG(Helper::LogLevel::LL_Debug, "Starting sort of final input on SSD\n");
+  SSD_SortSelections(selections);
 }
 
 
 
-void VectorIndex::ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::unordered_set<SizeType>& exceptIDS, int candidateNum, Edge* selections, int replicaCount, int numThreads, int numTrees, int leafSize, float RNGFactor, int numGPUs)
+void VectorIndex::ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::unordered_set<SizeType>& exceptIDS, int candidateNum, Edge* selections, int replicaCount, int numThreads, int numTrees, int leafSize, float RNGFactor, int numSSDs)
 {
 
-    LOG(Helper::LogLevel::LL_Info, "Starting GPU SSD Index build stage...\n");
+    LOG(Helper::LogLevel::LL_Info, "Starting SSD SSD Index build stage...\n");
 
     int metric = (GetDistCalcMethod() == SPTAG::DistCalcMethod::Cosine);
 
     if(m_pQuantizer) {
-        getTailNeighborsTPT<uint8_t, float>((uint8_t*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numGPUs, selections);
+        getTailNeighborsTPT<uint8_t, float>((uint8_t*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numSSDs, selections);
     }
     else if(GetVectorValueType() != VectorValueType::Float) {
         typedef int32_t SUMTYPE;
@@ -835,7 +835,7 @@ void VectorIndex::ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::u
         {
 #define DefineVectorValueType(Name, Type) \
         case VectorValueType::Name: \
-            getTailNeighborsTPT<Type, SUMTYPE>((Type*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numGPUs, selections); \
+            getTailNeighborsTPT<Type, SUMTYPE>((Type*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numSSDs, selections); \
             break; 
 
 #include "Core/DefinitionList.h"
@@ -845,7 +845,7 @@ void VectorIndex::ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::u
         }
     }
     else {
-        getTailNeighborsTPT<float, float>((float*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numGPUs, selections);
+        getTailNeighborsTPT<float, float>((float*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numSSDs, selections);
     }
 
 }
@@ -856,7 +856,7 @@ void VectorIndex::SortSelections(std::vector<Edge>* selections) {
     std::sort(selections->begin(), selections->end(), edgeComparer);
 }
 
-void VectorIndex::ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::unordered_set<SizeType>& exceptIDS, int candidateNum, Edge* selections, int replicaCount, int numThreads, int numTrees, int leafSize, float RNGFactor, int numGPUs)
+void VectorIndex::ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::unordered_set<SizeType>& exceptIDS, int candidateNum, Edge* selections, int replicaCount, int numThreads, int numTrees, int leafSize, float RNGFactor, int numSSDs)
 {
     std::vector<std::thread> threads;
     threads.reserve(numThreads);

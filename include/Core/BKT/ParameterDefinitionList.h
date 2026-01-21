@@ -30,11 +30,11 @@ DefineBKTParameter(m_pGraph.m_iAddCEF, int, 500L, "AddCEF")
 DefineBKTParameter(m_pGraph.m_iMaxCheckForRefineGraph, int, 8192L, "MaxCheckForRefineGraph")
 DefineBKTParameter(m_pGraph.m_fRNGFactor, float, 1.0f, "RNGFactor")
 
-DefineBKTParameter(m_pGraph.m_iGPUGraphType, int, 2, "GPUGraphType") // Have GPU construct KNN,loose RNG or RNG
-DefineBKTParameter(m_pGraph.m_iGPURefineSteps, int, 0, "GPURefineSteps") // Steps of GPU neighbor-refinement
-DefineBKTParameter(m_pGraph.m_iGPURefineDepth, int, 30, "GPURefineDepth") // Depth of graph search for refinement
-DefineBKTParameter(m_pGraph.m_iGPULeafSize, int, 500, "GPULeafSize")
-DefineBKTParameter(m_pGraph.m_iheadNumGPUs, int, 1, "HeadNumGPUs")
+DefineBKTParameter(m_pGraph.m_iSSDGraphType, int, 2, "SSDGraphType") // Have SSD construct KNN,loose RNG or RNG
+DefineBKTParameter(m_pGraph.m_iSSDRefineSteps, int, 0, "SSDRefineSteps") // Steps of SSD neighbor-refinement
+DefineBKTParameter(m_pGraph.m_iSSDRefineDepth, int, 30, "SSDRefineDepth") // Depth of graph search for refinement
+DefineBKTParameter(m_pGraph.m_iSSDLeafSize, int, 500, "SSDLeafSize")
+DefineBKTParameter(m_pGraph.m_iheadNumSSDs, int, 1, "HeadNumSSDs")
 DefineBKTParameter(m_pGraph.m_iTPTBalanceFactor, int, 2, "TPTBalanceFactor")
 
 DefineBKTParameter(m_iNumberOfThreads, int, 1L, "NumberOfThreads")

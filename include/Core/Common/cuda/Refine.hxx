@@ -383,14 +383,14 @@ __global__ void refineBatch_kernel(Point<T,SUMTYPE,MAX_DIM>* d_points, int batch
 }
 
 template<typename T, typename SUMTYPE, int MAX_DIM>
-void refineGraphGPU(SPTAG::VectorIndex* index, Point<T,SUMTYPE,MAX_DIM>* d_points, int* d_graph, int dataSize, int KVAL, int candidatesPerVector, int refineDepth, int refines, int metric) {
+void refineGraphSSD(SPTAG::VectorIndex* index, Point<T,SUMTYPE,MAX_DIM>* d_points, int* d_graph, int dataSize, int KVAL, int candidatesPerVector, int refineDepth, int refines, int metric) {
 
   // Find candidates using the BKT on the CPU
   auto t1 = std::chrono::high_resolution_clock::now();
   int* candidates = (int*)malloc(dataSize*candidatesPerVector*sizeof(int));
   getCandidates<T>(index, dataSize, candidatesPerVector, candidates);
 
-  // Copy candidate points to the GPU
+  // Copy candidate points to the SSD
   int* d_candidates;
   cudaMalloc(&d_candidates, dataSize*candidatesPerVector*sizeof(int));
   cudaMemcpy(d_candidates, candidates, dataSize*candidatesPerVector*sizeof(int), cudaMemcpyHostToDevice);
@@ -398,7 +398,7 @@ void refineGraphGPU(SPTAG::VectorIndex* index, Point<T,SUMTYPE,MAX_DIM>* d_point
   auto t2 = std::chrono::high_resolution_clock::now();
   LOG(SPTAG::Helper::LogLevel::LL_Info, "find candidates time (ms): %lld\n", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
-  // Use a number of batches of refinement to overlap CPU and GPU work (TODO)
+  // Use a number of batches of refinement to overlap CPU and SSD work (TODO)
   int NUM_BATCHES = 1;
   int batch_size = dataSize/NUM_BATCHES;
 
@@ -420,7 +420,7 @@ void refineGraphGPU(SPTAG::VectorIndex* index, Point<T,SUMTYPE,MAX_DIM>* d_point
 
   }
   t2 = std::chrono::high_resolution_clock::now();
-  LOG(SPTAG::Helper::LogLevel::LL_Info, "GPU refine time (ms): %lld\n", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
+  LOG(SPTAG::Helper::LogLevel::LL_Info, "SSD refine time (ms): %lld\n", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
   cudaFree(listMem);
   cudaFree(d_candidates);

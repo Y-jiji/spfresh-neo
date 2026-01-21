@@ -270,7 +270,7 @@ std::shared_ptr<SPFreshInterface<T>> SPFreshInterface<T>::createEmptyIndex(const
     opts->m_valueType = GetEnumValueType<T>();
     opts->m_indexAlgoType = IndexAlgoType::BKT;  // Head index type
     opts->m_indexDirectory = config.indexPath;
-    opts->m_headIndexFolder = config.indexPath + "/head";
+    opts->m_headIndexFolder = "head";  // Relative path - will be appended to m_indexDirectory
 
     // Head parameters
     opts->m_headVectorCount = config.headVectorCount;
@@ -278,6 +278,11 @@ std::shared_ptr<SPFreshInterface<T>> SPFreshInterface<T>::createEmptyIndex(const
     opts->m_iBKTKmeansK = 32;
     opts->m_iBKTLeafSize = 8;
     opts->m_replicaCount = 8;
+
+    // Enable head selection and building
+    opts->m_selectHead = true;
+    opts->m_buildHead = true;
+    opts->m_noOutput = false;  // Enable output of head vectors
 
     // Storage backend parameters - SPDK only
     opts->m_useSPDK = true;
@@ -301,15 +306,22 @@ std::shared_ptr<SPFreshInterface<T>> SPFreshInterface<T>::createEmptyIndex(const
     opts->m_postingPageLimit = 3;
     opts->m_searchPostingPageLimit = 3;
 
+    // CRITICAL: Disable SSD building to avoid SPDK double initialization
+    // The ExtraDynamicSearcher with SPDK will be created, but we won't build the SSD index
+    opts->m_buildSsdIndex = false;
+
     // Ensure directories exist
     if (!direxists(config.indexPath.c_str())) {
         mkdir(config.indexPath.c_str());
     }
-    if (!direxists(opts->m_headIndexFolder.c_str())) {
-        mkdir(opts->m_headIndexFolder.c_str());
+    std::string headIndexFullPath = config.indexPath + "/head";
+    if (!direxists(headIndexFullPath.c_str())) {
+        mkdir(headIndexFullPath.c_str());
     }
 
-    // Build an empty index with a single dummy vector to initialize structures
+    // Build an empty index with a single dummy vector to initialize head structures
+    // This will create ExtraDynamicSearcher with SPDK, which initializes SPDK in constructor
+    // We must NOT call m_buildSsdIndex path which would initialize SPDK again via thread pools
     std::vector<T> dummyVector(config.dimension, 0);
     ErrorCode ret = spannIndex->BuildIndex(
         dummyVector.data(),
@@ -324,8 +336,28 @@ std::shared_ptr<SPFreshInterface<T>> SPFreshInterface<T>::createEmptyIndex(const
         return nullptr;
     }
 
-    // Mark the index as ready
+    // Initialize version map with the dummy vector
+    // The version map tracks which vectors exist in the index
+    // Since we built with 1 dummy vector (VID 0), we need to initialize the map to start at 1
+    SPANN::Options* optsAfterBuild = spannIndex->GetOptions();
+    auto headIndex = spannIndex->GetMemoryIndex();
+    if (headIndex) {
+        // Initialize: vectorSize=1 (the dummy vector), blockSize, capacity
+        spannIndex->GetVersionMap().Initialize(
+            1,  // We have 1 vector (the dummy vector)
+            headIndex->m_iDataBlockSize,
+            headIndex->m_iDataCapacity
+        );
+        LOG(Helper::LogLevel::LL_Info, "Version map initialized with 1 dummy vector.\n");
+    } else {
+        LOG(Helper::LogLevel::LL_Error, "Failed to get head index for version map initialization!\n");
+        return nullptr;
+    }
+
+    // Mark the index as ready - this allows operations to proceed
     spannIndex->SetReady(true);
+
+    LOG(Helper::LogLevel::LL_Info, "Empty index structure created with SPDK support (SSD building disabled).\n");
 
     // Create and return the interface
     try {

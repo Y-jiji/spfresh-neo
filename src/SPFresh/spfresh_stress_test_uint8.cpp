@@ -142,10 +142,12 @@ void workerThread(
     const std::string& outputLogPath,
     Statistics& stats
 ) {
-    // Initialize thread-local index workspace
-    index->initialize();
+    std::cout << "[DEBUG] Thread " << threadId << " started, processing " << startIdx << " to " << endIdx << std::endl;
+
+    // Note: SPDK is already initialized in main thread, no per-thread initialization needed
 
     // Open thread-specific log file with large buffer to minimize I/O overhead
+    std::cout << "[DEBUG] Thread " << threadId << " opening log file..." << std::endl;
     std::ofstream logFile(outputLogPath + ".thread" + std::to_string(threadId), std::ios::app);
     if (!logFile) {
         std::cerr << "Thread " << threadId << ": Failed to open log file" << std::endl;
@@ -162,13 +164,36 @@ void workerThread(
     const size_t flushInterval = 1000; // Flush every 1000 operations
     size_t opsCount = 0;
 
+    std::cout << "[DEBUG] Thread " << threadId << " starting main loop..." << std::endl;
+
     for (size_t i = startIdx; i < endIdx; ++i) {
+        if (i == startIdx) {
+            std::cout << "[DEBUG] Thread " << threadId << " processing first operation (index " << i << ")" << std::endl;
+        }
+
         const VectorData& vd = data[i];
         bool isInsert = isInsertOperation(vd.sequenceNumber);
 
         if (isInsert) {
             // Insert operation
-            int vectorId = index->insertVector(vd.vector, "seq:" + std::to_string(vd.sequenceNumber));
+            if (i == startIdx) {
+                std::cout << "[DEBUG] Thread " << threadId << " calling insertVector()..." << std::endl;
+            }
+
+            int vectorId = -1;
+            try {
+                vectorId = index->insertVector(vd.vector, "seq:" + std::to_string(vd.sequenceNumber));
+
+                if (i == startIdx) {
+                    std::cout << "[DEBUG] Thread " << threadId << " first insertVector() succeeded with ID: " << vectorId << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[ERROR] Thread " << threadId << " insertVector() threw exception: " << e.what() << std::endl;
+                throw;
+            } catch (...) {
+                std::cerr << "[ERROR] Thread " << threadId << " insertVector() threw unknown exception" << std::endl;
+                throw;
+            }
 
             if (vectorId >= 0) {
                 logBuffer << "INSERT," << vd.sequenceNumber << "," << vectorId << "\n";
@@ -179,7 +204,24 @@ void workerThread(
             }
         } else {
             // Search operation
-            auto results = index->knnSearch(vd.vector, k, false);
+            if (i == startIdx) {
+                std::cout << "[DEBUG] Thread " << threadId << " calling knnSearch()..." << std::endl;
+            }
+
+            std::vector<SearchResult> results;
+            try {
+                results = index->knnSearch(vd.vector, k, false);
+
+                if (i == startIdx) {
+                    std::cout << "[DEBUG] Thread " << threadId << " first knnSearch() succeeded with " << results.size() << " results" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[ERROR] Thread " << threadId << " knnSearch() threw exception: " << e.what() << std::endl;
+                throw;
+            } catch (...) {
+                std::cerr << "[ERROR] Thread " << threadId << " knnSearch() threw unknown exception" << std::endl;
+                throw;
+            }
 
             logBuffer << "SEARCH," << vd.sequenceNumber << "," << k << ",";
             for (size_t j = 0; j < results.size(); ++j) {
@@ -344,6 +386,11 @@ int main(int argc, char* argv[]) {
         auto index = SPFreshInterface<uint8_t>::createEmptyIndex(indexConfig);
         std::cout << "Index created successfully!" << std::endl;
 
+        // Note: Do NOT call initialize() here - it causes segfault because
+        // the extra searcher is ExtraStaticSearcher (created during dummy build),
+        // not ExtraDynamicSearcher with SPDK. SPDK will be lazily initialized
+        // on the first insert operation.
+
         // Initialize statistics
         Statistics stats;
         std::atomic<bool> stopStatsLogger{false};
@@ -358,6 +405,10 @@ int main(int argc, char* argv[]) {
 
         // Launch worker threads
         std::cout << "Launching " << config.numThreads << " worker threads..." << std::endl;
+        std::cout << "[DEBUG] Index pointer: " << index.get() << std::endl;
+        std::cout << "[DEBUG] Total vectors: " << totalVectors << std::endl;
+        std::cout << "[DEBUG] Vectors per thread: " << vectorsPerThread << std::endl;
+
         std::vector<std::thread> workers;
         auto overallStart = std::chrono::steady_clock::now();
 
@@ -367,22 +418,34 @@ int main(int argc, char* argv[]) {
 
             if (startIdx >= totalVectors) break;
 
-            workers.emplace_back(
-                workerThread,
-                i,
-                index.get(),
-                std::cref(vectorData),
-                startIdx,
-                endIdx,
-                config.k,
-                config.outputLogPath,
-                std::ref(stats)
-            );
+            std::cout << "[DEBUG] Creating thread " << i << " for range [" << startIdx << ", " << endIdx << ")" << std::endl;
+
+            try {
+                workers.emplace_back(
+                    workerThread,
+                    i,
+                    index.get(),
+                    std::cref(vectorData),
+                    startIdx,
+                    endIdx,
+                    config.k,
+                    config.outputLogPath,
+                    std::ref(stats)
+                );
+                std::cout << "[DEBUG] Thread " << i << " created successfully" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[ERROR] Failed to create thread " << i << ": " << e.what() << std::endl;
+                throw;
+            }
         }
 
+        std::cout << "[DEBUG] All " << workers.size() << " threads created, waiting for completion..." << std::endl;
+
         // Wait for all workers to complete
-        for (auto& worker : workers) {
-            worker.join();
+        for (size_t i = 0; i < workers.size(); ++i) {
+            std::cout << "[DEBUG] Joining thread " << i << "..." << std::endl;
+            workers[i].join();
+            std::cout << "[DEBUG] Thread " << i << " joined" << std::endl;
         }
 
         auto overallEnd = std::chrono::steady_clock::now();

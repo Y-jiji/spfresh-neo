@@ -22,8 +22,8 @@
  * Licensed under the MIT License.
  */
 
-#ifndef _SPTAG_COMMON_CUDA_GPUQUANTIZER_H_
-#define _SPTAG_COMMON_CUDA_GPUQUANTIZER_H_
+#ifndef _SPTAG_COMMON_CUDA_SSDQUANTIZER_H_
+#define _SPTAG_COMMON_CUDA_SSDQUANTIZER_H_
 
 #include<cuda.h>
 #include<cstdint>
@@ -62,7 +62,7 @@ __host__ int GetRTypeWidth(RType type) {
   if(type == RType::Float) return 4;
 }
 
-class GPU_Quantizer {
+class SSD_Quantizer {
 
 //  private:
   public:
@@ -83,9 +83,9 @@ class GPU_Quantizer {
 
   public:
 
-    __host__ GPU_Quantizer() {}
+    __host__ SSD_Quantizer() {}
 
-    __host__ GPU_Quantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer, DistMetric metric) {
+    __host__ SSD_Quantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer, DistMetric metric) {
 
       // Make sure L2 is used, since other 
       if(metric != DistMetric::L2) {
@@ -124,7 +124,7 @@ class GPU_Quantizer {
         CUDA_CHECK(cudaMemcpy(m_DistanceTables, opq_quantizer->GetL2DistanceTables(), m_BlockSize*m_NumSubvectors*sizeof(float), cudaMemcpyHostToDevice));
       }
       else {
-        LOG(Helper::LogLevel::LL_Error, "Only PQ and OPQ quantizers are supported for GPU build\n");
+        LOG(Helper::LogLevel::LL_Error, "Only PQ and OPQ quantizers are supported for SSD build\n");
         exit(1);
       }
 
@@ -135,7 +135,7 @@ class GPU_Quantizer {
 
     }
 
-    __host__ ~GPU_Quantizer()
+    __host__ ~SSD_Quantizer()
     {
       cudaFree(m_DistanceTables);
     }
@@ -202,4 +202,4 @@ class GPU_Quantizer {
 
 }
 
-#endif // GPUQUANTIZER_H
+#endif // SSDQUANTIZER_H

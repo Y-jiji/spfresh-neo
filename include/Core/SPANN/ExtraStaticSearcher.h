@@ -495,7 +495,7 @@ namespace SPTAG
                         acc = acc / sampleNum;
                         LOG(Helper::LogLevel::LL_Info, "Batch %d vector(%d,%d) loaded with %d vectors (%zu) HeadIndex acc @%d:%f.\n", i, start, end, fullVectors->Count(), selections.m_selections.size(), candidateNum, acc);
 
-                        p_headIndex->ApproximateRNG(fullVectors, emptySet, candidateNum, selections.m_selections.data(), p_opt.m_replicaCount, numThreads, p_opt.m_gpuSSDNumTrees, p_opt.m_gpuSSDLeafSize, p_opt.m_rngFactor, p_opt.m_numGPUs);
+                        p_headIndex->ApproximateRNG(fullVectors, emptySet, candidateNum, selections.m_selections.data(), p_opt.m_replicaCount, numThreads, p_opt.m_SSDSSDNumTrees, p_opt.m_SSDSSDLeafSize, p_opt.m_rngFactor, p_opt.m_numSSDs);
                         LOG(Helper::LogLevel::LL_Info, "Batch %d finished!\n", i);
 
                         for (SizeType j = start; j < end; j++) {
@@ -530,7 +530,7 @@ namespace SPTAG
                     }
                 }
 
-                // Sort results either in CPU or GPU
+                // Sort results either in CPU or SSD
                 VectorIndex::SortSelections(&selections.m_selections);
 
                 auto t3 = std::chrono::high_resolution_clock::now();

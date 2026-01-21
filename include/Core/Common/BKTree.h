@@ -196,7 +196,7 @@ namespace SPTAG
             return diff;
         }
 
-#if defined(NEWGPU)
+#if defined(NEWSSD)
 
 #include "Core/Common/cuda/Kmeans.hxx"
 
@@ -209,7 +209,7 @@ namespace SPTAG
             SizeType totalSize = last - first;
 
 // TODO - compile-time options for MAX_DIM and metric
-            computeKmeansGPU<T, float, 100>(data, indices, first, last, args._K, args._D,
+            computeKmeansSSD<T, float, 100>(data, indices, first, last, args._K, args._D,
                                 args._DK, lambda, args.centers, args.label, args.counts, args.newCounts, args.newCenters, 
                                 args.clusterIdx, args.clusterDist, args.weightedCounts, args.newWeightedCounts, 0, updateCenters);
         }                               

@@ -28,11 +28,11 @@ DefineKDTParameter(m_pGraph.m_iAddCEF, int, 500L, "AddCEF")
 DefineKDTParameter(m_pGraph.m_iMaxCheckForRefineGraph, int, 8192L, "MaxCheckForRefineGraph")
 DefineKDTParameter(m_pGraph.m_fRNGFactor, float, 1.0f, "RNGFactor")
 
-DefineKDTParameter(m_pGraph.m_iGPUGraphType, int, 2, "GPUGraphType") // Have GPU construct KNN or RNG
-DefineKDTParameter(m_pGraph.m_iGPURefineSteps, int, 0, "GPURefineSteps") // Steps of GPU neighbor-refinement
-DefineKDTParameter(m_pGraph.m_iGPURefineDepth, int, 30, "GPURefineDepth") // Depth of graph search for refinement
-DefineKDTParameter(m_pGraph.m_iGPULeafSize, int, 500, "GPULeafSize")
-DefineKDTParameter(m_pGraph.m_iheadNumGPUs, int, 1, "HeadNumGPUs")
+DefineKDTParameter(m_pGraph.m_iSSDGraphType, int, 2, "SSDGraphType") // Have SSD construct KNN or RNG
+DefineKDTParameter(m_pGraph.m_iSSDRefineSteps, int, 0, "SSDRefineSteps") // Steps of SSD neighbor-refinement
+DefineKDTParameter(m_pGraph.m_iSSDRefineDepth, int, 30, "SSDRefineDepth") // Depth of graph search for refinement
+DefineKDTParameter(m_pGraph.m_iSSDLeafSize, int, 500, "SSDLeafSize")
+DefineKDTParameter(m_pGraph.m_iheadNumSSDs, int, 1, "HeadNumSSDs")
 DefineKDTParameter(m_pGraph.m_iTPTBalanceFactor, int, 2, "TPTBalanceFactor")
 
 DefineKDTParameter(m_iNumberOfThreads, int, 1L, "NumberOfThreads")

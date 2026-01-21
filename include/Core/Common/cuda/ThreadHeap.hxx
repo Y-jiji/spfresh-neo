@@ -27,7 +27,7 @@
 
 #include <stdio.h>
 #include "Distance.hxx"
-#include "GPUKNNDistance.hxx"
+#include "SSDKNNDistance.hxx"
 
 
 // Object used to store id,distance combination for KNN graph

@@ -103,10 +103,10 @@ DefineSSDParameter(m_preReassign, bool, false, "PreReassign")
 DefineSSDParameter(m_preReassignRatio, float, 0.7f, "PreReassignRatio")
 DefineSSDParameter(m_bufferLength, int, 3, "BufferLength")
 
-// GPU Building
-DefineSSDParameter(m_gpuSSDNumTrees, int, 100, "GPUSSDNumTrees")
-DefineSSDParameter(m_gpuSSDLeafSize, int, 200, "GPUSSDLeafSize")
-DefineSSDParameter(m_numGPUs, int, 1, "NumGPUs")
+// SSD Building
+DefineSSDParameter(m_SSDSSDNumTrees, int, 100, "SSDSSDNumTrees")
+DefineSSDParameter(m_SSDSSDLeafSize, int, 200, "SSDSSDLeafSize")
+DefineSSDParameter(m_numSSDs, int, 1, "NumSSDs")
 
 // Searching
 DefineSSDParameter(m_searchResult, std::string, std::string(""), "SearchResult")

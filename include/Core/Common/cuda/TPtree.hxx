@@ -33,7 +33,7 @@
 #include <curand_kernel.h>
 #include "params.h"
 #include "Distance.hxx"
-#include "GPUKNNDistance.hxx"
+#include "SSDKNNDistance.hxx"
 
 class TPtree;
 //template<typename T, typename KEY_T,typename SUMTYPE, int Dim>
@@ -107,7 +107,7 @@ __global__ void print_level_device(int* node_sizes, float* split_keys, int level
 
 
 /************************************************************************************
- * Definition of the GPU TPtree structure. 
+ * Definition of the SSD TPtree structure. 
  * Only contains the nodes and hyperplane definitions that partition the data, as well
  * as indexes into the point array.  Does not contain the data itself.
  **********************************************************************************/
@@ -224,9 +224,9 @@ class TPtree {
     }
 };
 
-// Construct TPT on each GPU 
+// Construct TPT on each SSD 
 template<typename T>
-__host__ void construct_trees_multigpu(TPtree** d_trees, PointSet<T>** ps, int N, int NUM_GPUS, cudaStream_t* streams, int balanceFactor) {
+__host__ void construct_trees_multiSSD(TPtree** d_trees, PointSet<T>** ps, int N, int NUM_SSDS, cudaStream_t* streams, int balanceFactor) {
 
     int nodes_on_level=1;
     int sample_size;
@@ -234,48 +234,48 @@ __host__ void construct_trees_multigpu(TPtree** d_trees, PointSet<T>** ps, int N
     const int RUN_BLOCKS = min(N/THREADS, BLOCKS);
     const int RAND_BLOCKS = min(N/THREADS, 1024); // Use fewer blocks for kernels using random numbers to cut down memory usage
 
-    float** frac_to_move = new float*[NUM_GPUS];
-    curandState** states = new curandState*[NUM_GPUS];
+    float** frac_to_move = new float*[NUM_SSDS];
+    curandState** states = new curandState*[NUM_SSDS];
 
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        CUDA_CHECK(cudaSetDevice(gpuNum));
-        CUDA_CHECK(cudaMalloc(&frac_to_move[gpuNum], d_trees[0]->num_nodes*sizeof(float)));
-        CUDA_CHECK(cudaMalloc(&states[gpuNum], RAND_BLOCKS*THREADS*sizeof(curandState)));
-        initialize_rands<<<RAND_BLOCKS,THREADS>>>(states[gpuNum], 0);
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        CUDA_CHECK(cudaSetDevice(SSDNum));
+        CUDA_CHECK(cudaMalloc(&frac_to_move[SSDNum], d_trees[0]->num_nodes*sizeof(float)));
+        CUDA_CHECK(cudaMalloc(&states[SSDNum], RAND_BLOCKS*THREADS*sizeof(curandState)));
+        initialize_rands<<<RAND_BLOCKS,THREADS>>>(states[SSDNum], 0);
     }
 
     for(int i=0; i<d_trees[0]->levels; ++i) {
 
         sample_size = min(N, nodes_on_level*SAMPLES); // number of samples to use to compute level sums
-        for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-            cudaSetDevice(gpuNum);
+        for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+            cudaSetDevice(SSDNum);
 
-            find_level_sum<T><<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(ps[gpuNum], d_trees[gpuNum]->weight_list, d_trees[gpuNum]->Dim, d_trees[gpuNum]->node_ids, d_trees[gpuNum]->split_keys, d_trees[gpuNum]->node_sizes, N, nodes_on_level, i, sample_size);
+            find_level_sum<T><<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(ps[SSDNum], d_trees[SSDNum]->weight_list, d_trees[SSDNum]->Dim, d_trees[SSDNum]->node_ids, d_trees[SSDNum]->split_keys, d_trees[SSDNum]->node_sizes, N, nodes_on_level, i, sample_size);
         }
 
 // TODO - fix rebalancing
 /*
         // Check and rebalance all levels beyond the first (first level has only 1 node)
         if(i > 0) {
-            for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-                cudaSetDevice(gpuNum);
+            for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+                cudaSetDevice(SSDNum);
 
                 // Compute imbalance factors for each node on level
-                check_for_imbalance<<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(d_trees[gpuNum]->node_ids, d_trees[gpuNum]->node_sizes, nodes_on_level, nodes_on_level-1, frac_to_move[gpuNum], balanceFactor);
+                check_for_imbalance<<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(d_trees[SSDNum]->node_ids, d_trees[SSDNum]->node_sizes, nodes_on_level, nodes_on_level-1, frac_to_move[SSDNum], balanceFactor);
 
                 // Randomly reassign points to neighboring nodes as needed based on imbalance factor
-                rebalance_nodes<<<RAND_BLOCKS,THREADS,0,streams[gpuNum]>>>(d_trees[gpuNum]->node_ids, N, frac_to_move[gpuNum], states[gpuNum]);
+                rebalance_nodes<<<RAND_BLOCKS,THREADS,0,streams[SSDNum]>>>(d_trees[SSDNum]->node_ids, N, frac_to_move[SSDNum], states[SSDNum]);
             }
         }
 */
 
-        for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-            cudaSetDevice(gpuNum);
+        for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+            cudaSetDevice(SSDNum);
 
-            compute_mean<<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(d_trees[gpuNum]->split_keys, d_trees[gpuNum]->node_sizes, d_trees[gpuNum]->num_nodes);
+            compute_mean<<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(d_trees[SSDNum]->split_keys, d_trees[SSDNum]->node_sizes, d_trees[SSDNum]->num_nodes);
 CUDA_CHECK(cudaDeviceSynchronize());
 
-            update_node_assignments<T><<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(ps[gpuNum], d_trees[gpuNum]->weight_list, d_trees[gpuNum]->node_ids, d_trees[gpuNum]->split_keys, d_trees[gpuNum]->node_sizes, N, i, d_trees[gpuNum]->Dim);
+            update_node_assignments<T><<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(ps[SSDNum], d_trees[SSDNum]->weight_list, d_trees[SSDNum]->node_ids, d_trees[SSDNum]->split_keys, d_trees[SSDNum]->node_sizes, N, i, d_trees[SSDNum]->Dim);
 
 CUDA_CHECK(cudaDeviceSynchronize());
         }
@@ -285,47 +285,47 @@ CUDA_CHECK(cudaDeviceSynchronize());
     }
 
     // Free memory used for rebalancing, etc.
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        cudaSetDevice(gpuNum);
-        cudaFree(frac_to_move[gpuNum]);
-        cudaFree(states[gpuNum]);
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        cudaSetDevice(SSDNum);
+        cudaFree(frac_to_move[SSDNum]);
+        cudaFree(states[SSDNum]);
     }
     delete[] frac_to_move;
     delete[] states;
 
     LeafNode* h_leafs = new LeafNode[d_trees[0]->num_leaves];
 
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        cudaSetDevice(gpuNum);
-        count_leaf_sizes<<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(d_trees[gpuNum]->leafs, d_trees[gpuNum]->node_ids, N, d_trees[gpuNum]->num_nodes - d_trees[gpuNum]->num_leaves);
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        cudaSetDevice(SSDNum);
+        count_leaf_sizes<<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(d_trees[SSDNum]->leafs, d_trees[SSDNum]->node_ids, N, d_trees[SSDNum]->num_nodes - d_trees[SSDNum]->num_leaves);
 
-        CUDA_CHECK(cudaMemcpyAsync(h_leafs, d_trees[gpuNum]->leafs, d_trees[gpuNum]->num_leaves*sizeof(LeafNode), cudaMemcpyDeviceToHost, streams[gpuNum]));
+        CUDA_CHECK(cudaMemcpyAsync(h_leafs, d_trees[SSDNum]->leafs, d_trees[SSDNum]->num_leaves*sizeof(LeafNode), cudaMemcpyDeviceToHost, streams[SSDNum]));
 
         h_leafs[0].offset = 0;
-        for(int i=1; i<d_trees[gpuNum]->num_leaves; ++i) {
+        for(int i=1; i<d_trees[SSDNum]->num_leaves; ++i) {
             h_leafs[i].offset = h_leafs[i-1].offset + h_leafs[i-1].size;
         } 
-        for(int i=0; i<d_trees[gpuNum]->num_leaves; ++i) {
+        for(int i=0; i<d_trees[SSDNum]->num_leaves; ++i) {
           h_leafs[i].size=0;
         }
 
-        CUDA_CHECK(cudaMemcpyAsync(d_trees[gpuNum]->leafs, h_leafs, d_trees[gpuNum]->num_leaves*sizeof(LeafNode), cudaMemcpyHostToDevice, streams[gpuNum]));
+        CUDA_CHECK(cudaMemcpyAsync(d_trees[SSDNum]->leafs, h_leafs, d_trees[SSDNum]->num_leaves*sizeof(LeafNode), cudaMemcpyHostToDevice, streams[SSDNum]));
 
-        assign_leaf_points_in_batch<<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(d_trees[gpuNum]->leafs, d_trees[gpuNum]->leaf_points, d_trees[gpuNum]->node_ids, N, d_trees[gpuNum]->num_nodes - d_trees[gpuNum]->num_leaves, 0, N);
+        assign_leaf_points_in_batch<<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(d_trees[SSDNum]->leafs, d_trees[SSDNum]->leaf_points, d_trees[SSDNum]->node_ids, N, d_trees[SSDNum]->num_nodes - d_trees[SSDNum]->num_leaves, 0, N);
     }
 
     delete[] h_leafs;
 
 
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        cudaSetDevice(gpuNum);
-        assign_leaf_points_out_batch<<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(d_trees[gpuNum]->leafs, d_trees[gpuNum]->leaf_points, d_trees[gpuNum]->node_ids, N, d_trees[gpuNum]->num_nodes - d_trees[gpuNum]->num_leaves, 0, N);
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        cudaSetDevice(SSDNum);
+        assign_leaf_points_out_batch<<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(d_trees[SSDNum]->leafs, d_trees[SSDNum]->leaf_points, d_trees[SSDNum]->node_ids, N, d_trees[SSDNum]->num_nodes - d_trees[SSDNum]->num_leaves, 0, N);
     }
 }
 
 /*
 template<typename T, typename R>
-__host__ void find_level_sum_batch_PQ(TPtree** d_trees, PointSet<T>** ps, int N, int NUM_GPUS, int nodes_on_level, int level, SPTAG::VectorIndex* index, size_t recon_batch_size) {
+__host__ void find_level_sum_batch_PQ(TPtree** d_trees, PointSet<T>** ps, int N, int NUM_SSDS, int nodes_on_level, int level, SPTAG::VectorIndex* index, size_t recon_batch_size) {
 
     const int RUN_BLOCKS = min(N/THREADS, BLOCKS);
     const int RAND_BLOCKS = min(N/THREADS, 1024); // Use fewer blocks for kernels using random numbers to cut down memory usage
@@ -333,11 +333,11 @@ __host__ void find_level_sum_batch_PQ(TPtree** d_trees, PointSet<T>** ps, int N,
     size_t reconDim = index->m_pQuantizer->ReconstructDim();
     R* recon_coords = new R[recon_batch_size*reconDim];
 
-    R** d_recon_coords = new R*[NUM_GPUS]; // raw reconstructed coordinates on GPU
-    PointSet<R>** d_recon_ps = new PointSet<R>*[NUM_GPUS];
+    R** d_recon_coords = new R*[NUM_SSDS]; // raw reconstructed coordinates on SSD
+    PointSet<R>** d_recon_ps = new PointSet<R>*[NUM_SSDS];
     
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        cudaSetDevice(gpuNum);
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        cudaSetDevice(SSDNum);
         
     }
     for(size_t i=0; i<N; i+=recon_batch_size) {
@@ -349,7 +349,7 @@ __host__ void find_level_sum_batch_PQ(TPtree** d_trees, PointSet<T>** ps, int N,
         CUDA_CHECK(cudaMemcpy(&d_
     }
 
-//    find_level_sum<T><<<RUN_BLOCKS,THREADS,0,streams[gpuNum]>>>(ps[gpuNum], d_trees[gpuNum]->weight_list, d_trees[gpuNum]->Dim, d_trees[gpuNum]->node_ids, d_trees[gpuNum]->split_keys, d_trees[gpuNum]->node_sizes, N, nodes_on_level, level);
+//    find_level_sum<T><<<RUN_BLOCKS,THREADS,0,streams[SSDNum]>>>(ps[SSDNum], d_trees[SSDNum]->weight_list, d_trees[SSDNum]->Dim, d_trees[SSDNum]->node_ids, d_trees[SSDNum]->split_keys, d_trees[SSDNum]->node_sizes, N, nodes_on_level, level);
 
     delete recon_coords;
 
@@ -357,7 +357,7 @@ __host__ void find_level_sum_batch_PQ(TPtree** d_trees, PointSet<T>** ps, int N,
 */
 
 template<typename T, typename R>
-__host__ void construct_trees_PQ(TPtree** d_trees, PointSet<T>** ps, int N, int NUM_GPUS, cudaStream_t* streams, SPTAG::VectorIndex* index) {
+__host__ void construct_trees_PQ(TPtree** d_trees, PointSet<T>** ps, int N, int NUM_SSDS, cudaStream_t* streams, SPTAG::VectorIndex* index) {
 
     size_t reconDim = index->m_pQuantizer->ReconstructDim();
     PointSet<R> temp_ps;
@@ -368,14 +368,14 @@ __host__ void construct_trees_PQ(TPtree** d_trees, PointSet<T>** ps, int N, int 
         index->m_pQuantizer->ReconstructVector((const uint8_t*)(index->GetSample(i)), &h_recon_raw[i*reconDim]);
     }
 
-    R** d_recon_raw = new R*[NUM_GPUS];
-    PointSet<R>** d_recon_ps = new PointSet<R>*[NUM_GPUS];
+    R** d_recon_raw = new R*[NUM_SSDS];
+    PointSet<R>** d_recon_ps = new PointSet<R>*[NUM_SSDS];
 
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        CUDA_CHECK(cudaSetDevice(gpuNum));
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        CUDA_CHECK(cudaSetDevice(SSDNum));
 
         cudaDeviceProp prop;
-        CUDA_CHECK(cudaGetDeviceProperties(&prop, gpuNum)); // Get avil. memory
+        CUDA_CHECK(cudaGetDeviceProperties(&prop, SSDNum)); // Get avil. memory
         size_t freeMem, totalMem;
         CUDA_CHECK(cudaMemGetInfo(&freeMem, &totalMem));
         size_t neededMem = N*reconDim*sizeof(R);
@@ -385,19 +385,19 @@ __host__ void construct_trees_PQ(TPtree** d_trees, PointSet<T>** ps, int N, int 
           exit(1);
         }
           
-        CUDA_CHECK(cudaMalloc(&d_recon_raw[gpuNum], N*reconDim*sizeof(R)));
-        CUDA_CHECK(cudaMemcpy(d_recon_raw[gpuNum], h_recon_raw, N*reconDim*sizeof(R), cudaMemcpyHostToDevice));
-        temp_ps.data = d_recon_raw[gpuNum];
-        CUDA_CHECK(cudaMalloc(&d_recon_ps[gpuNum], sizeof(PointSet<R>)));
-        CUDA_CHECK(cudaMemcpy(d_recon_ps[gpuNum], &temp_ps, sizeof(PointSet<R>), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMalloc(&d_recon_raw[SSDNum], N*reconDim*sizeof(R)));
+        CUDA_CHECK(cudaMemcpy(d_recon_raw[SSDNum], h_recon_raw, N*reconDim*sizeof(R), cudaMemcpyHostToDevice));
+        temp_ps.data = d_recon_raw[SSDNum];
+        CUDA_CHECK(cudaMalloc(&d_recon_ps[SSDNum], sizeof(PointSet<R>)));
+        CUDA_CHECK(cudaMemcpy(d_recon_ps[SSDNum], &temp_ps, sizeof(PointSet<R>), cudaMemcpyHostToDevice));
     }
 
-    construct_trees_multigpu<R>(d_trees, d_recon_ps, N, NUM_GPUS, streams, 0);
+    construct_trees_multiSSD<R>(d_trees, d_recon_ps, N, NUM_SSDS, streams, 0);
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        CUDA_CHECK(cudaFree(d_recon_raw[gpuNum]));
-        CUDA_CHECK(cudaFree(d_recon_ps[gpuNum]));
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        CUDA_CHECK(cudaFree(d_recon_raw[SSDNum]));
+        CUDA_CHECK(cudaFree(d_recon_ps[SSDNum]));
     }
     delete d_recon_raw;
     delete d_recon_ps;
@@ -418,64 +418,64 @@ printf("Num leaves:%d, min leaf:%d, max leaf:%d\n", d_trees[0]->num_leaves, min_
     const int RUN_BLOCKS = min(N/THREADS, BLOCKS);
     const int RAND_BLOCKS = min(N/THREADS, 1024); // Use fewer blocks for kernels using random numbers to cut down memory usage
 
-    float** frac_to_move = new float*[NUM_GPUS];
-    curandState** states = new curandState*[NUM_GPUS];
+    float** frac_to_move = new float*[NUM_SSDS];
+    curandState** states = new curandState*[NUM_SSDS];
 
     recon_batch_size = N;
 
     // Prepare random number generator
-    for(int gpuNum=0; gpuNum < NUM_GPUS; ++gpuNum) {
-        CUDA_CHECK(cudaSetDevice(gpuNum));
-        CUDA_CHECK(cudaMalloc(&frac_to_move[gpuNum], d_trees[0]->num_nodes*sizeof(float)));
-        CUDA_CHECK(cudaMalloc(&states[gpuNum], RAND_BLOCKS*THREADS*sizeof(curandState)));
-        initialize_rands<<<RAND_BLOCKS,THREADS>>>(states[gpuNum], 0);
+    for(int SSDNum=0; SSDNum < NUM_SSDS; ++SSDNum) {
+        CUDA_CHECK(cudaSetDevice(SSDNum));
+        CUDA_CHECK(cudaMalloc(&frac_to_move[SSDNum], d_trees[0]->num_nodes*sizeof(float)));
+        CUDA_CHECK(cudaMalloc(&states[SSDNum], RAND_BLOCKS*THREADS*sizeof(curandState)));
+        initialize_rands<<<RAND_BLOCKS,THREADS>>>(states[SSDNum], 0);
 
         cudaDeviceProp prop;
-        CUDA_CHECK(cudaGetDeviceProperties(&prop, gpuNum)); // Get avil. memory
-        LOG(SPTAG::Helper::LogLevel::LL_Info, "GPU %d - %s\n", gpuNum, prop.name);
+        CUDA_CHECK(cudaGetDeviceProperties(&prop, SSDNum)); // Get avil. memory
+        LOG(SPTAG::Helper::LogLevel::LL_Info, "SSD %d - %s\n", SSDNum, prop.name);
 
         size_t freeMem, totalMem;
         CUDA_CHECK(cudaMemGetInfo(&freeMem, &totalMem));
 
-        size_t gpu_batch_size = (freeMem*0.9) / sizeof(R);
-        if(gpu_batch_size < recon_batch_size) recon_batch_size = gpu_batch_size; // Use batch size of smallest GPU
+        size_t SSD_batch_size = (freeMem*0.9) / sizeof(R);
+        if(SSD_batch_size < recon_batch_size) recon_batch_size = SSD_batch_size; // Use batch size of smallest SSD
     }
 */
 // Get all reconstructed vectors on CPU
 //    for(int i=0; i<d_trees[0]->levels; ++i) {
-//        find_level_sum_batch_PQ<T, R>(d_trees, ps, N, NUM_GPUS, nodes_on_level, i, index, recon_batch_size);
+//        find_level_sum_batch_PQ<T, R>(d_trees, ps, N, NUM_SSDS, nodes_on_level, i, index, recon_batch_size);
 //    }
 }
 
 
 template<typename T>
-__host__ void create_tptree_multigpu(TPtree** d_trees, PointSet<T>** ps, int N, int MAX_LEVELS, int NUM_GPUS, cudaStream_t* streams, int balanceFactor, SPTAG::VectorIndex* index) {
+__host__ void create_tptree_multiSSD(TPtree** d_trees, PointSet<T>** ps, int N, int MAX_LEVELS, int NUM_SSDS, cudaStream_t* streams, int balanceFactor, SPTAG::VectorIndex* index) {
 
   KEYTYPE* h_weights = new KEYTYPE[d_trees[0]->levels*d_trees[0]->Dim];
   for(int i=0; i<d_trees[0]->levels*d_trees[0]->Dim; ++i) {
     h_weights[i] = ((rand()%2)*2)-1;
   }
 
-  // Copy random weights to each GPU
-  for(int gpuNum=0; gpuNum<NUM_GPUS; ++gpuNum) {
-    cudaSetDevice(gpuNum);
-    d_trees[gpuNum]->reset();
-    CUDA_CHECK(cudaMemcpy(d_trees[gpuNum]->weight_list, h_weights, d_trees[gpuNum]->levels*d_trees[gpuNum]->Dim*sizeof(KEYTYPE), cudaMemcpyHostToDevice));
+  // Copy random weights to each SSD
+  for(int SSDNum=0; SSDNum<NUM_SSDS; ++SSDNum) {
+    cudaSetDevice(SSDNum);
+    d_trees[SSDNum]->reset();
+    CUDA_CHECK(cudaMemcpy(d_trees[SSDNum]->weight_list, h_weights, d_trees[SSDNum]->levels*d_trees[SSDNum]->Dim*sizeof(KEYTYPE), cudaMemcpyHostToDevice));
   }
 
-  // Build TPT on each GPU  
-//  construct_trees_multigpu<T>(d_trees, ps, N, NUM_GPUS, streams, balanceFactor);
+  // Build TPT on each SSD  
+//  construct_trees_multiSSD<T>(d_trees, ps, N, NUM_SSDS, streams, balanceFactor);
 
   if(index->m_pQuantizer == NULL) { // Build directly if no quantizer
-    construct_trees_multigpu<T>(d_trees, ps, N, NUM_GPUS, streams, balanceFactor);
+    construct_trees_multiSSD<T>(d_trees, ps, N, NUM_SSDS, streams, balanceFactor);
   }
   else {
     VectorValueType reconType = index->m_pQuantizer->GetReconstructType();
     if(reconType == SPTAG::VectorValueType::Float) {
-      construct_trees_PQ<T, float>(d_trees, ps, N, NUM_GPUS, streams, index);
+      construct_trees_PQ<T, float>(d_trees, ps, N, NUM_SSDS, streams, index);
     }
     else if (reconType == SPTAG::VectorValueType::Int8) {
-      construct_trees_PQ<T, int8_t>(d_trees, ps, N, NUM_GPUS, streams, index);
+      construct_trees_PQ<T, int8_t>(d_trees, ps, N, NUM_SSDS, streams, index);
     }
   }
 
