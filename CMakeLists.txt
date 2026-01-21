@@ -165,6 +165,22 @@ target_include_directories(spfresh_stress_test PRIVATE
     $<INSTALL_INTERFACE:include>
 )
 
+# SPFresh Stress Test for uint8 vectors
+add_executable(spfresh_stress_test_uint8 src/SPFresh/spfresh_stress_test_uint8.cpp)
+target_link_libraries(spfresh_stress_test_uint8 PRIVATE SPFreshInterface Boost::headers rocksdb)
+target_include_directories(spfresh_stress_test_uint8 PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+# Vector Data Generation Utility
+add_executable(generate_vector_data src/Utils/generate_vector_data.cpp)
+target_link_libraries(generate_vector_data PRIVATE)
+target_include_directories(generate_vector_data PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
 
 file(GLOB_RECURSE USEFULTOOL_FILES src/UsefulTool/*.cpp)
 add_executable(usefultool ${USEFULTOOL_FILES})
