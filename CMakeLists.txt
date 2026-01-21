@@ -116,11 +116,43 @@ target_include_directories(ssdserving PRIVATE
 )
 
 file(GLOB_RECURSE SPFRESH_HDR_FILES include/SPFresh/*.h)
-file(GLOB_RECURSE SPFRESH_FILES src/SPFresh/*.cpp)
+file(GLOB SPFRESH_FILES src/SPFresh/main.cpp)
 add_executable(spfresh ${SPFRESH_HDR_FILES} ${SPFRESH_FILES})
 target_link_libraries(spfresh SPTAGLib Boost::headers rocksdb)
 target_compile_definitions(spfresh PRIVATE _exe)
 target_include_directories(spfresh PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+# SPFresh Interface library
+add_library(SPFreshInterface STATIC src/SPFresh/SPFreshInterface.cpp)
+target_link_libraries(SPFreshInterface PUBLIC SPTAGLib)
+target_include_directories(SPFreshInterface PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+# SPFresh Example executable (using existing index)
+add_executable(spfresh_example src/SPFresh/example_usage.cpp)
+target_link_libraries(spfresh_example PRIVATE SPFreshInterface Boost::headers rocksdb)
+target_include_directories(spfresh_example PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+# SPFresh Create Index Example (creating new empty index with RocksDB)
+add_executable(spfresh_create_index src/SPFresh/example_create_index.cpp)
+target_link_libraries(spfresh_create_index PRIVATE SPFreshInterface Boost::headers rocksdb)
+target_include_directories(spfresh_create_index PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+# SPFresh Create Index with SPDK Example (creating new empty index with SPDK backend)
+add_executable(spfresh_create_index_spdk src/SPFresh/example_create_index_spdk.cpp)
+target_link_libraries(spfresh_create_index_spdk PRIVATE SPFreshInterface Boost::headers rocksdb)
+target_include_directories(spfresh_create_index_spdk PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
