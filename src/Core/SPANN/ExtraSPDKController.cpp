@@ -19,6 +19,7 @@ pthread_t SPDKIO::BlockController::m_ssdSpdkTid;
 volatile bool SPDKIO::BlockController::m_ssdSpdkThreadStartFailed = false;
 volatile bool SPDKIO::BlockController::m_ssdSpdkThreadReady = false;
 volatile bool SPDKIO::BlockController::m_ssdSpdkThreadExiting = false;
+volatile bool SPDKIO::BlockController::m_ssdSpdkInitialized = false;
 struct spdk_bdev* SPDKIO::BlockController::m_ssdSpdkBdev = nullptr;
 struct spdk_bdev_desc* SPDKIO::BlockController::m_ssdSpdkBdevDesc = nullptr;
 struct spdk_io_channel* SPDKIO::BlockController::m_ssdSpdkBdevIoChannel = nullptr;
@@ -112,6 +113,7 @@ void SPDKIO::BlockController::SpdkStart(void *arg) {
     }
 
     ctrl->m_ssdSpdkThreadReady = true;
+    ctrl->m_ssdSpdkInitialized = true;
     m_ssdInflight = 0;
 
     SpdkIoLoop(ctrl);
@@ -129,6 +131,12 @@ void* SPDKIO::BlockController::InitializeSpdk(void *arg) {
     ctrl->m_ssdSpdkBdevName = spdkBdevName ? spdkBdevName : "";
     const char* spdkIoDepth = getenv(kSpdkIoDepth);
     if (spdkIoDepth) ctrl->m_ssdSpdkIoDepth = atoi(spdkIoDepth);
+    
+    // Additional options to help with memory allocation issues
+    opts.mem_channel = 1;  // Use fewer memory channels
+    opts.mem_size = 256;   // Very small memory size to force working
+    opts.no_pci = false;  // Ensure PCI access is enabled
+    opts.no_huge = true;  // Disable hugepages to test regular memory
 
     int rc;
     rc = spdk_app_start(&opts, &SPTAG::SPANN::SPDKIO::BlockController::SpdkStart, arg);
@@ -167,7 +175,17 @@ bool SPDKIO::BlockController::Initialize(int batchSize) {
                 m_blockAddresses.push(i);
             }
             pthread_create(&m_ssdSpdkTid, NULL, &InitializeSpdk, this);
-            while (!m_ssdSpdkThreadReady && !m_ssdSpdkThreadStartFailed);
+            // Add timeout to prevent infinite wait
+            auto initStart = std::chrono::steady_clock::now();
+            while (!m_ssdSpdkThreadReady && !m_ssdSpdkThreadStartFailed) {
+                if (std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - initStart).count() > 30) {
+                    fprintf(stderr, "SPDKIO::BlockController::Initialize timeout after 30 seconds\n");
+                    m_ssdSpdkThreadStartFailed = true;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             if (m_ssdSpdkThreadStartFailed) {
                 fprintf(stderr, "SPDKIO::BlockController::Initialize failed\n");
                 return false;
@@ -194,6 +212,12 @@ bool SPDKIO::BlockController::Initialize(int batchSize) {
 
 // get p_size blocks from front, and fill in p_data array
 bool SPDKIO::BlockController::GetBlocks(AddressType* p_data, int p_size) {
+    // Check if SPDK is properly initialized for SSD implementation
+    if (m_useSsdImpl && !m_ssdSpdkInitialized) {
+        fprintf(stderr, "SPDKIO::BlockController::GetBlocks failed - SPDK not initialized\n");
+        return false;
+    }
+    
     AddressType currBlockAddress = 0;
     if (m_useMemImpl || m_useSsdImpl) {
         for (int i = 0; i < p_size; i++) {
@@ -209,6 +233,12 @@ bool SPDKIO::BlockController::GetBlocks(AddressType* p_data, int p_size) {
 
 // release p_size blocks, put them at the end of the queue
 bool SPDKIO::BlockController::ReleaseBlocks(AddressType* p_data, int p_size) {
+    // Check if SPDK is properly initialized for SSD implementation
+    if (m_useSsdImpl && !m_ssdSpdkInitialized) {
+        fprintf(stderr, "SPDKIO::BlockController::ReleaseBlocks failed - SPDK not initialized\n");
+        return false;
+    }
+    
     if (m_useMemImpl || m_useSsdImpl) {
         for (int i = 0; i < p_size; i++) {
             m_blockAddresses.push(p_data[i]);
@@ -224,6 +254,12 @@ bool SPDKIO::BlockController::ReleaseBlocks(AddressType* p_data, int p_size) {
 // p_data[1], p_data[2], ..., p_data[((p_data[0] + PageSize - 1) >> PageSizeEx)] are the addresses of the blocks
 // concat all the block contents together into p_value string.
 bool SPDKIO::BlockController::ReadBlocks(AddressType* p_data, std::string* p_value, const std::chrono::microseconds &timeout) {
+    // Check if SPDK is properly initialized for SSD implementation
+    if (m_useSsdImpl && !m_ssdSpdkInitialized) {
+        fprintf(stderr, "SPDKIO::BlockController::ReadBlocks failed - SPDK not initialized\n");
+        return false;
+    }
+    
     if (m_useMemImpl) {
         p_value->resize(p_data[0]);
         AddressType currOffset = 0;
@@ -387,6 +423,12 @@ bool SPDKIO::BlockController::ReadBlocks(std::vector<AddressType*>& p_data, std:
 
 // write p_value into p_size blocks start from p_data
 bool SPDKIO::BlockController::WriteBlocks(AddressType* p_data, int p_size, const std::string& p_value) {
+    // Check if SPDK is properly initialized for SSD implementation
+    if (m_useSsdImpl && !m_ssdSpdkInitialized) {
+        fprintf(stderr, "SPDKIO::BlockController::WriteBlocks failed - SPDK not initialized\n");
+        return false;
+    }
+    
     if (m_useMemImpl) {
         for (int i = 0; i < p_size; i++) {
             memcpy(m_memBuffer.get() + p_data[i] * PageSize, p_value.data() + i * PageSize, PageSize);

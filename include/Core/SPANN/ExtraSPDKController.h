@@ -12,6 +12,8 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
+#include <thread>
+#include <chrono>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_hash_map.h>
 
@@ -48,6 +50,7 @@ namespace SPTAG::SPANN
             static volatile bool m_ssdSpdkThreadStartFailed;
             static volatile bool m_ssdSpdkThreadReady;
             static volatile bool m_ssdSpdkThreadExiting;
+            static volatile bool m_ssdSpdkInitialized;
             static struct spdk_bdev *m_ssdSpdkBdev;
             static struct spdk_bdev_desc *m_ssdSpdkBdevDesc;
             static struct spdk_io_channel *m_ssdSpdkBdevIoChannel;
