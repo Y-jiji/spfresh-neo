@@ -8,6 +8,10 @@
 #include <chrono>
 #include <iomanip>
 #include <cstring>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 // Pure function to determine if a sequence number is for insert (true) or search (false)
 // This is a dummy implementation that can be replaced
@@ -42,29 +46,89 @@ struct Statistics {
 
 struct VectorData {
     uint64_t sequenceNumber;
-    std::vector<float> vector;
+    const float* vector;  // Pointer to memory-mapped data
 };
 
-// Read all vectors from binary file
-std::vector<VectorData> readVectorData(const std::string& filePath, int dimension) {
-    std::ifstream inFile(filePath, std::ios::binary);
-    if (!inFile) {
-        throw std::runtime_error("Failed to open data file: " + filePath);
+struct MappedVectorData {
+    float* mappedData;
+    size_t fileSize;
+    size_t vectorCount;
+    int fd;
+    
+    ~MappedVectorData() {
+        if (mappedData && mappedData != MAP_FAILED) {
+            munmap(mappedData, fileSize);
+        }
+        if (fd >= 0) {
+            close(fd);
+        }
     }
+};
 
+// Memory-map the vector data file with error handling and advice for sequential access
+std::unique_ptr<MappedVectorData> mapVectorData(const std::string& filePath, int dimension) {
+    auto mappedData = std::make_unique<MappedVectorData>();
+    mappedData->fd = -1;
+    mappedData->mappedData = nullptr;
+    
+    // Open the file
+    mappedData->fd = open(filePath.c_str(), O_RDONLY);
+    if (mappedData->fd < 0) {
+        throw std::runtime_error("Failed to open data file: " + filePath + " (errno: " + std::to_string(errno) + ")");
+    }
+    
+    // Get file size
+    struct stat sb;
+    if (fstat(mappedData->fd, &sb) == -1) {
+        close(mappedData->fd);
+        throw std::runtime_error("Failed to get file size: " + filePath + " (errno: " + std::to_string(errno) + ")");
+    }
+    
+    mappedData->fileSize = sb.st_size;
+    
+    // Calculate vector count
+    size_t vectorSize = dimension * sizeof(float);
+    if (mappedData->fileSize % vectorSize != 0) {
+        close(mappedData->fd);
+        throw std::runtime_error("File size (" + std::to_string(mappedData->fileSize) + 
+                                ") is not a multiple of vector size (" + std::to_string(vectorSize) + ")");
+    }
+    
+    mappedData->vectorCount = mappedData->fileSize / vectorSize;
+    
+    // Memory-map the file
+    mappedData->mappedData = static_cast<float*>(mmap(nullptr, mappedData->fileSize, 
+                                                      PROT_READ, MAP_PRIVATE, 
+                                                      mappedData->fd, 0));
+    if (mappedData->mappedData == MAP_FAILED) {
+        close(mappedData->fd);
+        throw std::runtime_error("Failed to memory-map file: " + filePath + " (errno: " + std::to_string(errno) + ")");
+    }
+    
+    // Advise the kernel about access pattern (random access for stress test)
+    if (madvise(mappedData->mappedData, mappedData->fileSize, MADV_RANDOM) != 0) {
+        std::cerr << "Warning: madvise failed (errno: " << errno << "), but continuing..." << std::endl;
+    }
+    
+    std::cout << "Memory-mapped " << mappedData->vectorCount << " vectors from " 
+              << filePath << " (" << (mappedData->fileSize / (1024.0 * 1024.0 * 1024.0)) 
+              << " GB)" << std::endl;
+    
+    return mappedData;
+}
+
+// Create vector data array with pointers to mapped data
+std::vector<VectorData> createVectorDataArray(const MappedVectorData& mappedData, int dimension) {
     std::vector<VectorData> data;
-    uint64_t seqNum = 0;
-
-    std::vector<float> buffer(dimension);
-    while (inFile.read(reinterpret_cast<char*>(buffer.data()), dimension * sizeof(float))) {
+    data.reserve(mappedData.vectorCount);
+    
+    for (size_t i = 0; i < mappedData.vectorCount; ++i) {
         VectorData vd;
-        vd.sequenceNumber = seqNum++;
-        vd.vector = buffer;
+        vd.sequenceNumber = i;
+        vd.vector = mappedData.mappedData + (i * dimension);
         data.push_back(vd);
     }
-
-    inFile.close();
-    std::cout << "Read " << data.size() << " vectors from " << filePath << std::endl;
+    
     return data;
 }
 
@@ -105,7 +169,7 @@ void workerThread(
 
         if (isInsert) {
             // Insert operation
-            int vectorId = index->insertVector(vd.vector.data(), "seq:" + std::to_string(vd.sequenceNumber));
+            int vectorId = index->insertVector(vd.vector, "seq:" + std::to_string(vd.sequenceNumber));
 
             if (vectorId >= 0) {
                 logBuffer << "INSERT," << vd.sequenceNumber << "," << vectorId << "\n";
@@ -116,7 +180,7 @@ void workerThread(
             }
         } else {
             // Search operation
-            auto results = index->knnSearch(vd.vector.data(), k, false);
+            auto results = index->knnSearch(vd.vector, k, false);
 
             logBuffer << "SEARCH," << vd.sequenceNumber << "," << k << ",";
             for (size_t j = 0; j < results.size(); ++j) {
@@ -255,14 +319,17 @@ int main(int argc, char* argv[]) {
     std::cout << "==========================================" << std::endl;
 
     try {
-        // Read vector data
-        std::cout << "\nReading vector data..." << std::endl;
-        auto vectorData = readVectorData(config.dataFilePath, config.dimension);
-
-        if (vectorData.empty()) {
+        // Memory-map vector data
+        std::cout << "\nMemory-mapping vector data..." << std::endl;
+        auto mappedData = mapVectorData(config.dataFilePath, config.dimension);
+        
+        if (mappedData->vectorCount == 0) {
             std::cerr << "No vectors found in data file!" << std::endl;
             return 1;
         }
+        
+        // Create vector data array with pointers to mapped data
+        auto vectorData = createVectorDataArray(*mappedData, config.dimension);
 
         // Create SPDK-based index
         std::cout << "\nCreating SPDK-based index..." << std::endl;
