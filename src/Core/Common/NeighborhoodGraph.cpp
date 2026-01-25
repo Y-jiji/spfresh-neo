@@ -5,18 +5,16 @@
 #include "Core/Common/KNearestNeighborhoodGraph.h"
 #include "Core/Common/RelativeNeighborhoodGraph.h"
 
-using namespace SPTAG::COMMON;
-
-std::shared_ptr<NeighborhoodGraph> NeighborhoodGraph::CreateInstance(std::string type)
+std::shared_ptr<SPTAG::COMMON::NeighborhoodGraph> SPTAG::COMMON::NeighborhoodGraph::CreateInstance(std::string type)
 {
-    std::shared_ptr<NeighborhoodGraph> res;
+    std::shared_ptr<SPTAG::COMMON::NeighborhoodGraph> res;
     if (type == "RNG")
     {
-        res.reset(new RelativeNeighborhoodGraph);
+        res.reset(new SPTAG::COMMON::RelativeNeighborhoodGraph);
     }
     else if (type == "NNG") 
     {
-        res.reset(new KNearestNeighborhoodGraph);
+        res.reset(new SPTAG::COMMON::KNearestNeighborhoodGraph);
     }
     return res;
 }

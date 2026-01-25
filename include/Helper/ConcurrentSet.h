@@ -4,24 +4,17 @@
 #ifndef _SPTAG_HELPER_CONCURRENTSET_H_
 #define _SPTAG_HELPER_CONCURRENTSET_H_
 
-#ifndef _MSC_VER
 #include <shared_mutex>
 #include <unordered_set>
 #include <unordered_map>
 #include <queue>
 #include <mutex>
-#else
-#include <concurrent_unordered_map.h>
-#include <concurrent_queue.h>
-#include <concurrent_unordered_set.h>
-#endif
 namespace SPTAG
 {
     namespace Helper
     {
         namespace Concurrent
         {
-#ifndef _MSC_VER
             template <typename T>
             class ConcurrentSet
             {
@@ -114,16 +107,6 @@ namespace SPTAG
                 std::mutex m_lock;
                 std::queue<T> m_queue;
             };
-#else
-            template <typename T>
-            using ConcurrentSet = Concurrency::concurrent_unordered_set<T>;
-
-            template <typename K, typename V>
-            using ConcurrentMap = Concurrency::concurrent_unordered_map<K, V>;
-            
-            template <typename T>
-            using ConcurrentQueue = Concurrency::concurrent_queue<T>;
-#endif
         }
     }
 }

@@ -6,8 +6,10 @@
 
 #include <time.h>
 
-using namespace SPTAG;
-using namespace SPTAG::Helper;
+namespace SPTAG {
+namespace Helper {
+
+using SPTAG::g_pLogger;
 
 XvecVectorReader::XvecVectorReader(std::shared_ptr<ReaderOptions> p_options)
     : VectorSetReader(p_options)
@@ -34,23 +36,23 @@ XvecVectorReader::~XvecVectorReader()
 ErrorCode
 XvecVectorReader::LoadFile(const std::string& p_filePaths)
 {
-    const auto& files = Helper::StrUtils::SplitString(p_filePaths, ",");
-    auto fp = f_createIO();
+    const auto& files = StrUtils::SplitString(p_filePaths, ",");
+    auto fp = SPTAG::f_createIO();
     if (fp == nullptr || !fp->Initialize(m_vectorOutput.c_str(), std::ios::binary | std::ios::out)) {
-        LOG(Helper::LogLevel::LL_Error, "Failed to write file: %s \n", m_vectorOutput.c_str());
+        LOG(LogLevel::LL_Error, "Failed to write file: %s \n", m_vectorOutput.c_str());
         return ErrorCode::FailedCreateFile;
     }
     SizeType vectorCount = 0;
     IOBINARY(fp, WriteBinary, sizeof(vectorCount), (char*)&vectorCount);
     IOBINARY(fp, WriteBinary, sizeof(m_options->m_dimension), (char*)&(m_options->m_dimension));
     
-    size_t vectorDataSize = GetValueTypeSize(m_options->m_inputValueType) * m_options->m_dimension;
+    size_t vectorDataSize = SPTAG::GetValueTypeSize(m_options->m_inputValueType) * m_options->m_dimension;
     std::unique_ptr<char[]> buffer(new char[vectorDataSize]);
     for (std::string file : files)
     {
-        auto ptr = f_createIO();
+        auto ptr = SPTAG::f_createIO();
         if (ptr == nullptr || !ptr->Initialize(file.c_str(), std::ios::binary | std::ios::in)) {
-            LOG(Helper::LogLevel::LL_Error, "Failed to read file: %s \n", file.c_str());
+            LOG(LogLevel::LL_Error, "Failed to read file: %s \n", file.c_str());
             return ErrorCode::FailedOpenFile;
         }
         while (true)
@@ -59,7 +61,7 @@ XvecVectorReader::LoadFile(const std::string& p_filePaths)
             if (ptr->ReadBinary(sizeof(DimensionType), (char*)&dim) == 0) break;
 
             if (dim != m_options->m_dimension) {
-                LOG(Helper::LogLevel::LL_Error, "Xvec file %s has No.%d vector whose dims are not as many as expected. Expected: %d, Fact: %d\n", file.c_str(), vectorCount, m_options->m_dimension, dim);
+                LOG(LogLevel::LL_Error, "Xvec file %s has No.%d vector whose dims are not as many as expected. Expected: %d, Fact: %d\n", file.c_str(), vectorCount, m_options->m_dimension, dim);
                 return ErrorCode::DimensionSizeMismatch;
             }
             IOBINARY(ptr, ReadBinary, vectorDataSize, buffer.get());
@@ -72,48 +74,51 @@ XvecVectorReader::LoadFile(const std::string& p_filePaths)
 }
 
 
-std::shared_ptr<VectorSet>
-XvecVectorReader::GetVectorSet(SizeType start, SizeType end) const
+std::shared_ptr<SPTAG::VectorSet>
+XvecVectorReader::GetVectorSet(SPTAG::SizeType start, SPTAG::SizeType end) const
 {
-    auto ptr = f_createIO();
+    auto ptr = SPTAG::f_createIO();
     if (ptr == nullptr || !ptr->Initialize(m_vectorOutput.c_str(), std::ios::binary | std::ios::in)) {
-        LOG(Helper::LogLevel::LL_Error, "Failed to read file %s.\n", m_vectorOutput.c_str());
+        LOG(LogLevel::LL_Error, "Failed to read file %s.\n", m_vectorOutput.c_str());
         throw std::runtime_error("Failed read file");
     }
 
-    SizeType row;
-    DimensionType col;
-    if (ptr->ReadBinary(sizeof(SizeType), (char*)&row) != sizeof(SizeType)) {
-        LOG(Helper::LogLevel::LL_Error, "Failed to read VectorSet!\n");
+    SPTAG::SizeType row;
+    SPTAG::DimensionType col;
+    if (ptr->ReadBinary(sizeof(SPTAG::SizeType), (char*)&row) != sizeof(SPTAG::SizeType)) {
+        LOG(LogLevel::LL_Error, "Failed to read VectorSet!\n");
         throw std::runtime_error("Failed read file");
     }
-    if (ptr->ReadBinary(sizeof(DimensionType), (char*)&col) != sizeof(DimensionType)) {
-        LOG(Helper::LogLevel::LL_Error, "Failed to read VectorSet!\n");
+    if (ptr->ReadBinary(sizeof(SPTAG::DimensionType), (char*)&col) != sizeof(SPTAG::DimensionType)) {
+        LOG(LogLevel::LL_Error, "Failed to read VectorSet!\n");
         throw std::runtime_error("Failed read file");
     }
 
     if (start > row) start = row;
     if (end < 0 || end > row) end = row;
-    std::uint64_t totalRecordVectorBytes = ((std::uint64_t)GetValueTypeSize(m_options->m_inputValueType)) * (end - start) * col;
-    ByteArray vectorSet;
+    std::uint64_t totalRecordVectorBytes = ((std::uint64_t)SPTAG::GetValueTypeSize(m_options->m_inputValueType)) * (end - start) * col;
+    SPTAG::ByteArray vectorSet;
     if (totalRecordVectorBytes > 0) {
-        vectorSet = ByteArray::Alloc(totalRecordVectorBytes);
+        vectorSet = SPTAG::ByteArray::Alloc(totalRecordVectorBytes);
         char* vecBuf = reinterpret_cast<char*>(vectorSet.Data());
-        std::uint64_t offset = ((std::uint64_t)GetValueTypeSize(m_options->m_inputValueType)) * start * col + +sizeof(SizeType) + sizeof(DimensionType);
+        std::uint64_t offset = ((std::uint64_t)SPTAG::GetValueTypeSize(m_options->m_inputValueType)) * start * col + +sizeof(SPTAG::SizeType) + sizeof(SPTAG::DimensionType);
         if (ptr->ReadBinary(totalRecordVectorBytes, vecBuf, offset) != totalRecordVectorBytes) {
-            LOG(Helper::LogLevel::LL_Error, "Failed to read VectorSet!\n");
+            LOG(LogLevel::LL_Error, "Failed to read VectorSet!\n");
             throw std::runtime_error("Failed read file");
         }
     }
-    return std::shared_ptr<VectorSet>(new BasicVectorSet(vectorSet,
+    return std::shared_ptr<SPTAG::VectorSet>(new SPTAG::BasicVectorSet(vectorSet,
         m_options->m_inputValueType,
         col,
         end - start));
 }
 
 
-std::shared_ptr<MetadataSet>
+std::shared_ptr<SPTAG::MetadataSet>
 XvecVectorReader::GetMetadataSet() const
 {
     return nullptr;
 }
+
+} // namespace Helper
+} // namespace SPTAG

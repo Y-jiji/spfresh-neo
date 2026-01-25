@@ -7,23 +7,20 @@
 #include <cctype>
 #include <functional>
 
-using namespace SPTAG;
-using namespace SPTAG::Helper;
-
-const IniReader::ParameterValueMap IniReader::c_emptyParameters;
+const SPTAG::Helper::IniReader::ParameterValueMap SPTAG::Helper::IniReader::c_emptyParameters;
 
 
-IniReader::IniReader()
+SPTAG::Helper::IniReader::IniReader()
 {
 }
 
 
-IniReader::~IniReader()
+SPTAG::Helper::IniReader::~IniReader()
 {
 }
 
 
-ErrorCode IniReader::LoadIni(std::shared_ptr<Helper::DiskIO> p_input)
+SPTAG::ErrorCode SPTAG::Helper::IniReader::LoadIni(std::shared_ptr<SPTAG::Helper::DiskIO> p_input)
 {
     std::uint64_t c_bufferSize = 1 << 16;
 
@@ -52,7 +49,7 @@ ErrorCode IniReader::LoadIni(std::shared_ptr<Helper::DiskIO> p_input)
             ++len;
         }
 
-        auto nonSpaceSeg = StrUtils::FindTrimmedSegment(line.get(), line.get() + len, isSpace);
+        auto nonSpaceSeg = SPTAG::Helper::StrUtils::FindTrimmedSegment(line.get(), line.get() + len, isSpace);
 
         if (nonSpaceSeg.second <= nonSpaceSeg.first)
         {
@@ -70,19 +67,19 @@ ErrorCode IniReader::LoadIni(std::shared_ptr<Helper::DiskIO> p_input)
             // Parse Section
             if (']' != *(nonSpaceSeg.second - 1))
             {
-                return ErrorCode::ReadIni_FailedParseSection;
+                return SPTAG::ErrorCode::ReadIni_FailedParseSection;
             }
 
-            auto sectionSeg = StrUtils::FindTrimmedSegment(nonSpaceSeg.first + 1, nonSpaceSeg.second - 1, isSpace);
+            auto sectionSeg = SPTAG::Helper::StrUtils::FindTrimmedSegment(nonSpaceSeg.first + 1, nonSpaceSeg.second - 1, isSpace);
 
             if (sectionSeg.second <= sectionSeg.first)
             {
                 // Empty section name.
-                return ErrorCode::ReadIni_FailedParseSection;
+                return SPTAG::ErrorCode::ReadIni_FailedParseSection;
             }
 
             currSection.assign(sectionSeg.first, sectionSeg.second);
-            StrUtils::ToLowerInPlace(currSection);
+            SPTAG::Helper::StrUtils::ToLowerInPlace(currSection);
 
             if (m_parameters.count(currSection) == 0)
             {
@@ -91,7 +88,7 @@ ErrorCode IniReader::LoadIni(std::shared_ptr<Helper::DiskIO> p_input)
             }
             else
             {
-                return ErrorCode::ReadIni_DuplicatedSection;
+                return SPTAG::ErrorCode::ReadIni_DuplicatedSection;
             }
         }
         else
@@ -105,19 +102,19 @@ ErrorCode IniReader::LoadIni(std::shared_ptr<Helper::DiskIO> p_input)
 
             if (equalSignLoc >= nonSpaceSeg.second)
             {
-                return ErrorCode::ReadIni_FailedParseParam;
+                return SPTAG::ErrorCode::ReadIni_FailedParseParam;
             }
 
-            auto paramSeg = StrUtils::FindTrimmedSegment(nonSpaceSeg.first, equalSignLoc, isSpace);
+            auto paramSeg = SPTAG::Helper::StrUtils::FindTrimmedSegment(nonSpaceSeg.first, equalSignLoc, isSpace);
 
             if (paramSeg.second <= paramSeg.first)
             {
                 // Empty parameter name.
-                return ErrorCode::ReadIni_FailedParseParam;
+                return SPTAG::ErrorCode::ReadIni_FailedParseParam;
             }
 
             std::string paramName(paramSeg.first, paramSeg.second);
-            StrUtils::ToLowerInPlace(paramName);
+            SPTAG::Helper::StrUtils::ToLowerInPlace(paramName);
 
             if (currParamMap->count(paramName) == 0)
             {
@@ -125,37 +122,37 @@ ErrorCode IniReader::LoadIni(std::shared_ptr<Helper::DiskIO> p_input)
             }
             else
             {
-                return ErrorCode::ReadIni_DuplicatedParam;
+                return SPTAG::ErrorCode::ReadIni_DuplicatedParam;
             }
         }
     }
-    return ErrorCode::Success;
+    return SPTAG::ErrorCode::Success;
 }
 
 
-ErrorCode
-IniReader::LoadIniFile(const std::string& p_iniFilePath)
+SPTAG::ErrorCode
+SPTAG::Helper::IniReader::LoadIniFile(const std::string& p_iniFilePath)
 {
-    auto ptr = f_createIO();
-    if (ptr == nullptr || !ptr->Initialize(p_iniFilePath.c_str(), std::ios::in)) return ErrorCode::FailedOpenFile;
+    auto ptr = SPTAG::f_createIO();
+    if (ptr == nullptr || !ptr->Initialize(p_iniFilePath.c_str(), std::ios::in)) return SPTAG::ErrorCode::FailedOpenFile;
     return LoadIni(ptr);
 }
 
 
 bool
-IniReader::DoesSectionExist(const std::string& p_section) const
+SPTAG::Helper::IniReader::DoesSectionExist(const std::string& p_section) const
 {
     std::string section(p_section);
-    StrUtils::ToLowerInPlace(section);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(section);
     return m_parameters.count(section) != 0;
 }
 
 
 bool
-IniReader::DoesParameterExist(const std::string& p_section, const std::string& p_param) const
+SPTAG::Helper::IniReader::DoesParameterExist(const std::string& p_section, const std::string& p_param) const
 {
     std::string name(p_section);
-    StrUtils::ToLowerInPlace(name);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(name);
     auto iter = m_parameters.find(name);
     if (iter == m_parameters.cend())
     {
@@ -169,16 +166,16 @@ IniReader::DoesParameterExist(const std::string& p_section, const std::string& p
     }
 
     name = p_param;
-    StrUtils::ToLowerInPlace(name);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(name);
     return paramMap->count(name) != 0;
 }
 
 
 bool
-IniReader::GetRawValue(const std::string& p_section, const std::string& p_param, std::string& p_value) const
+SPTAG::Helper::IniReader::GetRawValue(const std::string& p_section, const std::string& p_param, std::string& p_value) const
 {
     std::string name(p_section);
-    StrUtils::ToLowerInPlace(name);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(name);
     auto sectionIter = m_parameters.find(name);
     if (sectionIter == m_parameters.cend())
     {
@@ -192,7 +189,7 @@ IniReader::GetRawValue(const std::string& p_section, const std::string& p_param,
     }
 
     name = p_param;
-    StrUtils::ToLowerInPlace(name);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(name);
     auto paramIter = paramMap->find(name);
     if (paramIter == paramMap->cend())
     {
@@ -204,11 +201,11 @@ IniReader::GetRawValue(const std::string& p_section, const std::string& p_param,
 }
 
 
-const IniReader::ParameterValueMap&
-IniReader::GetParameters(const std::string& p_section) const
+const SPTAG::Helper::IniReader::ParameterValueMap&
+SPTAG::Helper::IniReader::GetParameters(const std::string& p_section) const
 {
     std::string name(p_section);
-    StrUtils::ToLowerInPlace(name);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(name);
     auto sectionIter = m_parameters.find(name);
     if (sectionIter == m_parameters.cend() || nullptr == sectionIter->second)
     {
@@ -219,10 +216,10 @@ IniReader::GetParameters(const std::string& p_section) const
 }
 
 void
-IniReader::SetParameter(const std::string& p_section, const std::string& p_param, const std::string& p_val)
+SPTAG::Helper::IniReader::SetParameter(const std::string& p_section, const std::string& p_param, const std::string& p_val)
 {
     std::string name(p_section);
-    StrUtils::ToLowerInPlace(name);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(name);
     auto sectionIter = m_parameters.find(name);
     if (sectionIter == m_parameters.cend() || sectionIter->second == nullptr) 
     {
@@ -230,6 +227,6 @@ IniReader::SetParameter(const std::string& p_section, const std::string& p_param
     }
 
     std::string param(p_param);
-    StrUtils::ToLowerInPlace(param);
+    SPTAG::Helper::StrUtils::ToLowerInPlace(param);
     (*m_parameters[name])[param] = p_val;
 }

@@ -1,22 +1,20 @@
 #include "Helper/DynamicNeighbors.h"
 #include "Core/Common.h"
 
-using namespace SPTAG::Helper;
-
-DynamicNeighbors::DynamicNeighbors(const int* p_data, const int p_length)
+SPTAG::Helper::DynamicNeighbors::DynamicNeighbors(const int* p_data, const int p_length)
     : c_data(p_data),
     c_length(p_length)
 {
 }
 
 
-DynamicNeighbors:: ~DynamicNeighbors()
+SPTAG::Helper::DynamicNeighbors::~DynamicNeighbors()
 {
 }
 
 
 int
-DynamicNeighbors::operator[](const int p_id) const
+SPTAG::Helper::DynamicNeighbors::operator[](const int p_id) const
 {
     if (p_id < c_length && p_id >= 0)
     {
@@ -28,13 +26,13 @@ DynamicNeighbors::operator[](const int p_id) const
 
 
 int
-DynamicNeighbors::Size() const
+SPTAG::Helper::DynamicNeighbors::Size() const
 {
     return c_length;
 }
 
 
-DynamicNeighborsSet::DynamicNeighborsSet(const char* p_filePath)
+SPTAG::Helper::DynamicNeighborsSet::DynamicNeighborsSet(const char* p_filePath)
 {
     auto fp = f_createIO();
     if (fp == nullptr || !fp->Initialize(p_filePath, std::ios::binary | std::ios::in)) {
@@ -69,18 +67,18 @@ DynamicNeighborsSet::DynamicNeighborsSet(const char* p_filePath)
 }
 
 
-DynamicNeighborsSet::~DynamicNeighborsSet()
+SPTAG::Helper::DynamicNeighborsSet::~DynamicNeighborsSet()
 {
 }
 
 
-DynamicNeighbors DynamicNeighborsSet::operator[](const int p_id) const
+SPTAG::Helper::DynamicNeighbors SPTAG::Helper::DynamicNeighborsSet::operator[](const int p_id) const
 {
     if (p_id >= m_vectorCount)
     {
-        return DynamicNeighbors(nullptr, 0);
+        return SPTAG::Helper::DynamicNeighbors(nullptr, 0);
     }
 
-    return DynamicNeighbors(m_data.get() + static_cast<uint64_t>(m_neighborOffset[p_id]),
+    return SPTAG::Helper::DynamicNeighbors(m_data.get() + static_cast<uint64_t>(m_neighborOffset[p_id]),
         m_neighborOffset[p_id + 1] - m_neighborOffset[p_id]);
 }

@@ -38,9 +38,7 @@
 #include "Core/VectorIndex.h"
 #include "GPUQuantizer.hxx"
 
-using namespace std;
 
-using namespace SPTAG;
 
 
 // Templated infinity value
@@ -101,7 +99,7 @@ __forceinline__ __device__ SUMTYPE l2(T* aVec, T* bVec) {
 
 template<typename T, typename SUMTYPE, int Dim, int metric>
 __device__ SUMTYPE dist(T* a, T* b) {
-  if(metric == (int)DistMetric::Cosine) {
+  if(metric == (int)SPTAG::DistMetric::Cosine) {
     if(::cuda::std::is_same<T,int8_t>::value) {
       return cosine_int8<Dim>((int8_t*)a, (int8_t*)b);
     }
@@ -124,7 +122,7 @@ class PointSet {
   public:
     int dim;
     T* data;
-    DistMetric metric;
+    SPTAG::DistMetric metric;
 
   __forceinline__ __device__ T* getVec(size_t idx) {
     return &(data[idx*dim]);

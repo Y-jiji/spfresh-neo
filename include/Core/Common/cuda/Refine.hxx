@@ -20,9 +20,6 @@
 #define REFINE_BLOCKS 1024
 
 /*
-using namespace SPTAG;
-using namespace std;
-
 template <typename SUMTYPE>
 class ListElt {
   public:

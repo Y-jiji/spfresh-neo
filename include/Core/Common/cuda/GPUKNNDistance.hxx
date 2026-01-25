@@ -34,9 +34,7 @@
 
 #include "Core/VectorIndex.h"
 
-using namespace std;
 
-using namespace SPTAG;
 
 // Templated infinity value
 /*********************************************************************
@@ -50,7 +48,7 @@ public:
     int id;
     T coords[Dim];
 
-    __host__ void load(vector<T> data) {
+    __host__ void load(std::vector<T> data) {
         for (int i = 0; i < Dim; i++) {
             coords[i] = data[i];
         }
@@ -139,7 +137,7 @@ public:
     int id;
     uint32_t coords[Dim / 4];
 
-    __host__ void load(vector<uint8_t> data) {
+    __host__ void load(std::vector<uint8_t> data) {
         for (int i = 0; i < Dim / 4; i++) {
             coords[i] = 0;
             for (int j = 0; j < 4; j++) {
@@ -247,7 +245,7 @@ public:
     int id;
     uint32_t coords[Dim / 4];
 
-    __host__ void load(vector<int8_t> data) {
+    __host__ void load(std::vector<int8_t> data) {
 
         uint8_t* test = reinterpret_cast<uint8_t*>(data.data());
         for (int i = 0; i < Dim / 4; i++) {

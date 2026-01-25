@@ -14,8 +14,6 @@
 #include <iostream>
 #include <fstream>
 
-using namespace SPTAG;
-
 namespace SPTAG {
 	namespace SSDServing {
         namespace SPFresh {
@@ -64,11 +62,11 @@ namespace SPTAG {
             };
 
             template <typename ValueType>
-            void OutputResult(const std::string& p_output, std::vector<QueryResult>& p_results, int p_resultNum)
+            void OutputResult(const std::string& p_output, std::vector<SPTAG::QueryResult>& p_results, int p_resultNum)
             {
                 if (!p_output.empty())
                 {
-                    auto ptr = f_createIO();
+                    auto ptr = SPTAG::f_createIO();
                     if (ptr == nullptr || !ptr->Initialize(p_output.c_str(), std::ios::binary | std::ios::out)) {
                         LOG(Helper::LogLevel::LL_Error, "Failed create file: %s\n", p_output.c_str());
                         exit(1);
@@ -111,13 +109,7 @@ namespace SPTAG {
                 std::ifstream buffer("/proc/self/statm");
                 buffer >> tSize >> resident >> share;
                 buffer.close();
-#ifndef _MSC_VER
-                long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
-#else
-                SYSTEM_INFO sysInfo;
-                GetSystemInfo(&sysInfo);
-                long page_size_kb = sysInfo.dwPageSize / 1024;
-#endif
+                long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
                 long rss = resident * page_size_kb;
                 long vector_size;
                 if (vectorSet != nullptr)
@@ -175,16 +167,16 @@ namespace SPTAG {
             }
 
             template <typename T>
-            static float CalculateRecallSPFresh(VectorIndex* index, std::vector<QueryResult>& results, const std::vector<std::set<SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false)
+            static float CalculateRecallSPFresh(SPTAG::VectorIndex* index, std::vector<SPTAG::QueryResult>& results, const std::vector<std::set<SPTAG::SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SPTAG::SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false)
             {
-                float meanrecall = 0, minrecall = MaxDist, maxrecall = 0, stdrecall = 0;
+                float meanrecall = 0, minrecall = SPTAG::MaxDist, maxrecall = 0, stdrecall = 0;
                 std::vector<float> thisrecall(NumQuerys, 0);
                 std::unique_ptr<bool[]> visited(new bool[K]);
                 LOG(Helper::LogLevel::LL_Info, "Start Calculating Recall\n");
-                for (SizeType i = 0; i < NumQuerys; i++)
+                for (SPTAG::SizeType i = 0; i < NumQuerys; i++)
                 {
                     memset(visited.get(), 0, K * sizeof(bool));
-                    for (SizeType id : truth[i])
+                    for (SPTAG::SizeType id : truth[i])
                     {
                         for (int j = 0; j < K; j++)
                         {
@@ -192,12 +184,12 @@ namespace SPTAG {
                             if (vectorSet != nullptr) {
                                 float dist = results[i].GetResult(j)->Dist;
                                 float truthDist = COMMON::DistanceUtils::ComputeDistance((const T*)querySet->GetVector(i), (const T*)vectorSet->GetVector(id), vectorSet->Dimension(), index->GetDistCalcMethod());
-                                if (index->GetDistCalcMethod() == SPTAG::DistCalcMethod::Cosine && fabs(dist - truthDist) < Epsilon) {
+                                if (index->GetDistCalcMethod() == SPTAG::DistCalcMethod::Cosine && fabs(dist - truthDist) < SPTAG::Epsilon) {
                                     thisrecall[i] += 1;
                                     visited[j] = true;
                                     break;
                                 }
-                                else if (index->GetDistCalcMethod() == SPTAG::DistCalcMethod::L2 && fabs(dist - truthDist) < Epsilon * (dist + Epsilon)) {
+                                else if (index->GetDistCalcMethod() == SPTAG::DistCalcMethod::L2 && fabs(dist - truthDist) < SPTAG::Epsilon * (dist + SPTAG::Epsilon)) {
                                     thisrecall[i] += 1;
                                     visited[j] = true;
                                     break;
@@ -212,8 +204,8 @@ namespace SPTAG {
 
                     if (debug) {
                         std::string ll("recall:" + std::to_string(thisrecall[i]) + "\ngroundtruth:");
-                        std::vector<NodeDistPair> truthvec;
-                        for (SizeType id : truth[i]) {
+                        std::vector<SPTAG::NodeDistPair> truthvec;
+                        for (SPTAG::SizeType id : truth[i]) {
                             float truthDist = 0.0;
                             if (vectorSet != nullptr) {
                                 truthDist = COMMON::DistanceUtils::ComputeDistance((const T*)querySet->GetVector(i), (const T*)vectorSet->GetVector(id), querySet->Dimension(), index->GetDistCalcMethod());
@@ -231,7 +223,7 @@ namespace SPTAG {
                     }
                 }
                 meanrecall /= NumQuerys;
-                for (SizeType i = 0; i < NumQuerys; i++)
+                for (SPTAG::SizeType i = 0; i < NumQuerys; i++)
                 {
                     stdrecall += (thisrecall[i] - meanrecall) * (thisrecall[i] - meanrecall);
                 }
@@ -256,7 +248,7 @@ namespace SPTAG {
             template <typename ValueType>
             double SearchSequential(SPANN::Index<ValueType>* p_index,
                 int p_numThreads,
-                std::vector<QueryResult>& p_results,
+                std::vector<SPTAG::QueryResult>& p_results,
                 std::vector<SPANN::SearchStats>& p_stats,
                 int p_maxQueryCount, int p_internalResultNum)
             {
@@ -469,18 +461,18 @@ namespace SPTAG {
                 return fileName;
             }
 
-            std::shared_ptr<VectorSet>  LoadVectorSet(SPANN::Options& p_opts, int numThreads)
+            std::shared_ptr<SPTAG::VectorSet>  LoadVectorSet(SPANN::Options& p_opts, int numThreads)
             {
-                std::shared_ptr<VectorSet> vectorSet;
+                std::shared_ptr<SPTAG::VectorSet> vectorSet;
                 if (p_opts.m_loadAllVectors) {
                     LOG(Helper::LogLevel::LL_Info, "Start loading VectorSet...\n");
                     if (!p_opts.m_fullVectorPath.empty() && fileexists(p_opts.m_fullVectorPath.c_str())) {
                         std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorType, p_opts.m_vectorDelimiter));
                         auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
-                        if (ErrorCode::Success == vectorReader->LoadFile(p_opts.m_fullVectorPath))
+                        if (SPTAG::ErrorCode::Success == vectorReader->LoadFile(p_opts.m_fullVectorPath))
                         {
                             vectorSet = vectorReader->GetVectorSet();
-                            if (p_opts.m_distCalcMethod == DistCalcMethod::Cosine) vectorSet->Normalize(numThreads);
+                            if (p_opts.m_distCalcMethod == SPTAG::DistCalcMethod::Cosine) vectorSet->Normalize(numThreads);
                             LOG(Helper::LogLevel::LL_Info, "\nLoad VectorSet(%d,%d).\n", vectorSet->Count(), vectorSet->Dimension());
                         }
                     }
@@ -490,7 +482,7 @@ namespace SPTAG {
                 return vectorSet;
             }
 
-            std::shared_ptr<VectorSet>  LoadUpdateVectors(SPANN::Options& p_opts, std::vector<SizeType>& insertSet, SizeType updateSize)
+            std::shared_ptr<SPTAG::VectorSet>  LoadUpdateVectors(SPANN::Options& p_opts, std::vector<SPTAG::SizeType>& insertSet, SPTAG::SizeType updateSize)
             {
                 LOG(Helper::LogLevel::LL_Info, "Load Update Vectors\n");
                 auto ptr = f_createIO();
@@ -499,25 +491,25 @@ namespace SPTAG {
                     throw std::runtime_error("Failed read file");
                 }
 
-                SizeType row;
-                DimensionType col;
-                if (ptr->ReadBinary(sizeof(SizeType), (char*)&row) != sizeof(SizeType)) {
+                SPTAG::SizeType row;
+                SPTAG::DimensionType col;
+                if (ptr->ReadBinary(sizeof(SPTAG::SizeType), (char*)&row) != sizeof(SPTAG::SizeType)) {
                     LOG(Helper::LogLevel::LL_Error, "Failed to read VectorSet!\n");
                     throw std::runtime_error("Failed read file");
                 }
-                if (ptr->ReadBinary(sizeof(DimensionType), (char*)&col) != sizeof(DimensionType)) {
+                if (ptr->ReadBinary(sizeof(SPTAG::DimensionType), (char*)&col) != sizeof(SPTAG::DimensionType)) {
                     LOG(Helper::LogLevel::LL_Error, "Failed to read VectorSet!\n");
                     throw std::runtime_error("Failed read file");
                 }
 
-                std::uint64_t totalRecordVectorBytes = ((std::uint64_t)GetValueTypeSize(p_opts.m_valueType)) * updateSize * col;
-                ByteArray vectorSet;
+                std::uint64_t totalRecordVectorBytes = ((std::uint64_t)SPTAG::GetValueTypeSize(p_opts.m_valueType)) * updateSize * col;
+                SPTAG::ByteArray vectorSet;
                 if (totalRecordVectorBytes > 0) {
-                    vectorSet = ByteArray::Alloc(totalRecordVectorBytes);
+                    vectorSet = SPTAG::ByteArray::Alloc(totalRecordVectorBytes);
                     char* vecBuf = reinterpret_cast<char*>(vectorSet.Data());
-                    std::uint64_t readSize = ((std::uint64_t)GetValueTypeSize(p_opts.m_valueType)) * col;
+                    std::uint64_t readSize = ((std::uint64_t)SPTAG::GetValueTypeSize(p_opts.m_valueType)) * col;
                     for (int i = 0; i < updateSize; i++) {
-                        std::uint64_t offset = ((std::uint64_t)GetValueTypeSize(p_opts.m_valueType)) * insertSet[i] * col + sizeof(SizeType) + sizeof(DimensionType);
+                        std::uint64_t offset = ((std::uint64_t)SPTAG::GetValueTypeSize(p_opts.m_valueType)) * insertSet[i] * col + sizeof(SPTAG::SizeType) + sizeof(SPTAG::DimensionType);
                         if (ptr->ReadBinary(readSize, vecBuf + i*readSize, offset) != readSize) {
                             LOG(Helper::LogLevel::LL_Error, "Failed to read VectorSet!\n");
                             throw std::runtime_error("Failed read file");
@@ -525,7 +517,7 @@ namespace SPTAG {
                     }
                 }
                 LOG(Helper::LogLevel::LL_Info, "Load Vector(%d,%d)\n",updateSize, col);
-                return std::make_shared<BasicVectorSet>(vectorSet,
+                return std::make_shared<SPTAG::BasicVectorSet>(vectorSet,
                                                         p_opts.m_valueType,
                                                         col,
                                                         updateSize);
@@ -537,7 +529,7 @@ namespace SPTAG {
                 LOG(Helper::LogLevel::LL_Info, "Start loading QuerySet...\n");
                 std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryType, p_opts.m_queryDelimiter));
                 auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
-                if (ErrorCode::Success != queryReader->LoadFile(p_opts.m_queryPath))
+                if (SPTAG::ErrorCode::Success != queryReader->LoadFile(p_opts.m_queryPath))
                 {
                     LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
                     exit(1);
@@ -545,7 +537,7 @@ namespace SPTAG {
                 return queryReader->GetVectorSet();
             }
 
-            void LoadTruth(SPANN::Options& p_opts, std::vector<std::set<SizeType>>& truth, int numQueries, std::string truthfilename, int truthK)
+            void LoadTruth(SPANN::Options& p_opts, std::vector<std::set<SPTAG::SizeType>>& truth, int numQueries, std::string truthfilename, int truthK)
             {
                 auto ptr = f_createIO();
                 if (p_opts.m_update) {
@@ -587,7 +579,7 @@ namespace SPTAG {
                 if (avgStatsNum == 0) return;
                 int numQueries = querySet->Count();
 
-                std::vector<QueryResult> results(numQueries, QueryResult(NULL, internalResultNum, false));
+                std::vector<SPTAG::QueryResult> results(numQueries, SPTAG::QueryResult(NULL, internalResultNum, false));
 
                 if (showStatus) LOG(Helper::LogLevel::LL_Info, "Searching: numThread: %d, numQueries: %d, searchTimes: %d.\n", numThreads, numQueries, avgStatsNum);
                 std::vector<SPANN::SearchStats> stats(numQueries);
@@ -614,7 +606,7 @@ namespace SPTAG {
                 if (p_opts.m_calTruth)
                 {
                     if (p_opts.m_searchResult.empty()) {
-                        std::vector<std::set<SizeType>> truth;
+                        std::vector<std::set<SPTAG::SizeType>> truth;
                         int truthK = p_opts.m_resultNum;
                         LoadTruth(p_opts, truth, numQueries, truthFileName, truthK);
                         CalculateRecallSPFresh<ValueType>((p_index->GetMemoryIndex()).get(), results, truth, p_opts.m_resultNum, truthK, querySet, vectorSet, numQueries);
@@ -624,7 +616,7 @@ namespace SPTAG {
                 }
             }
 
-            void LoadUpdateMapping(std::string fileName, std::vector<SizeType>& reverseIndices)
+            void LoadUpdateMapping(std::string fileName, std::vector<SPTAG::SizeType>& reverseIndices)
             {
                 LOG(Helper::LogLevel::LL_Info, "Loading %s\n", fileName.c_str());
 
@@ -649,7 +641,7 @@ namespace SPTAG {
                 }
             }
 
-            void LoadUpdateTrace(std::string fileName, SizeType& updateSize, std::vector<SizeType>& insertSet, std::vector<SizeType>& deleteSet)
+            void LoadUpdateTrace(std::string fileName, SPTAG::SizeType& updateSize, std::vector<SPTAG::SizeType>& insertSet, std::vector<SPTAG::SizeType>& deleteSet)
             {
                 LOG(Helper::LogLevel::LL_Info, "Loading %s\n", fileName.c_str());
 
@@ -690,7 +682,7 @@ namespace SPTAG {
                 }
             }
 
-            void LoadUpdateTraceStressTest(std::string fileName, SizeType& updateSize, std::vector<SizeType>& insertSet)
+            void LoadUpdateTraceStressTest(std::string fileName, SPTAG::SizeType& updateSize, std::vector<SPTAG::SizeType>& insertSet)
             {
                 LOG(Helper::LogLevel::LL_Info, "Loading %s\n", fileName.c_str());
 
@@ -725,8 +717,8 @@ namespace SPTAG {
             void InsertVectorsBySet(SPANN::Index<ValueType>* p_index, 
                 int insertThreads, 
                 std::shared_ptr<SPTAG::VectorSet> vectorSet, 
-                std::vector<SizeType>& insertSet,
-                std::vector<SizeType>& mapping,
+                std::vector<SPTAG::SizeType>& insertSet,
+                std::vector<SPTAG::SizeType>& mapping,
                 int updateSize,
                 SPANN::Options& p_opts)
             {
@@ -811,8 +803,8 @@ namespace SPTAG {
             void DeleteVectorsBySet(SPANN::Index<ValueType>* p_index, 
                 int deleteThreads, 
                 std::shared_ptr<SPTAG::VectorSet> vectorSet,
-                std::vector<SizeType>& deleteSet,
-                std::vector<SizeType>& mapping,
+                std::vector<SPTAG::SizeType>& deleteSet,
+                std::vector<SPTAG::SizeType>& mapping,
                 int updateSize,
                 SPANN::Options& p_opts,
                 int batch)
@@ -928,9 +920,9 @@ namespace SPTAG {
                 LOG(Helper::LogLevel::LL_Info, "Start updating...\n");
 
                 int updateSize;
-                std::vector<SizeType> insertSet;
-                std::vector<SizeType> deleteSet;
-                std::vector<SizeType> mapping;
+                std::vector<SPTAG::SizeType> insertSet;
+                std::vector<SPTAG::SizeType> deleteSet;
+                std::vector<SPTAG::SizeType> mapping;
                 if (p_opts.m_endVectorNum == -1) p_opts.m_endVectorNum = curCount;
                 mapping.resize(p_opts.m_endVectorNum);
                 for (int i = 0; i < p_opts.m_endVectorNum; i++) {
@@ -1050,7 +1042,7 @@ namespace SPTAG {
                                 LOG(Helper::LogLevel::LL_Info, "Sent %.2lf%%...\n", index * 100.0 / step);
                             }
                             auto insertBegin = std::chrono::high_resolution_clock::now();
-                            p_index->AddIndex(vectorSet->GetVector((SizeType)(index + curCount)), 1, p_opts.m_dim, nullptr);
+                            p_index->AddIndex(vectorSet->GetVector((SPTAG::SizeType)(index + curCount)), 1, p_opts.m_dim, nullptr);
                             auto insertEnd = std::chrono::high_resolution_clock::now();
                             latency_vector[index] = std::chrono::duration_cast<std::chrono::microseconds>(insertEnd - insertBegin).count();
                         }
@@ -1210,9 +1202,9 @@ namespace SPTAG {
 
             int UpdateTest(const char* storePath) {
 
-                std::shared_ptr<VectorIndex> index;
+                std::shared_ptr<SPTAG::VectorIndex> index;
 
-                if (index->LoadIndex(storePath, index) != ErrorCode::Success) {
+                if (index->LoadIndex(storePath, index) != SPTAG::ErrorCode::Success) {
                     LOG(Helper::LogLevel::LL_Error, "Failed to load index.\n");
                     return 1;
                 }
@@ -1220,7 +1212,7 @@ namespace SPTAG {
                 SPANN::Options* opts = nullptr;
 
             #define DefineVectorValueType(Name, Type) \
-                if (index->GetVectorValueType() == VectorValueType::Name) { \
+                if (index->GetVectorValueType() == SPTAG::VectorValueType::Name) { \
                     opts = ((SPANN::Index<Type>*)index.get())->GetOptions(); \
                 } \
 
@@ -1228,7 +1220,7 @@ namespace SPTAG {
             #undef DefineVectorValueType
 
             #define DefineVectorValueType(Name, Type) \
-                if (opts->m_valueType == VectorValueType::Name) { \
+                if (opts->m_valueType == SPTAG::VectorValueType::Name) { \
                     if (opts->m_steadyState) SteadyStateSPFresh((SPANN::Index<Type>*)(index.get())); \
                     else UpdateSPFresh((SPANN::Index<Type>*)(index.get())); \
                 } \

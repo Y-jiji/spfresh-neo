@@ -5,7 +5,6 @@
 
 namespace SPTAG {
     namespace Helper {
-#ifndef _MSC_VER
         void SetThreadAffinity(int threadID, std::thread& thread, char socketStrategy, char idStrategy)
         {
 #ifdef NUMA
@@ -122,79 +121,5 @@ namespace SPTAG {
                 }
             }
         }
-#else
-        ULONGLONG GetCpuMasks(WORD group, DWORD numCpus)
-        {
-            ULONGLONG masks = 0, mask = 1;
-            for (DWORD i = 0; i < numCpus; ++i)
-            {
-                masks |= mask;
-                mask <<= 1;
-            }
-
-            return masks;
-        }
-
-        void SetThreadAffinity(int threadID, std::thread& thread, char socketStrategy, char idStrategy)
-        {
-            WORD numGroups = GetActiveProcessorGroupCount();
-            DWORD numCpus = GetActiveProcessorCount(0);
-
-            GROUP_AFFINITY ga;
-            memset(&ga, 0, sizeof(ga));
-            PROCESSOR_NUMBER pn;
-            memset(&pn, 0, sizeof(pn));
-
-            WORD group = (WORD)(threadID / numCpus);
-            pn.Number = (BYTE)(threadID % numCpus);
-            if (socketStrategy == 1) {
-                group = (WORD)(threadID % numGroups);
-                pn.Number = (BYTE)((threadID / numGroups) % numCpus);
-            }
-
-            ga.Group = group;
-            ga.Mask = GetCpuMasks(group, numCpus);
-            BOOL res = SetThreadGroupAffinity(GetCurrentThread(), &ga, NULL);
-            if (!res)
-            {
-                LOG(Helper::LogLevel::LL_Error, "Failed SetThreadGroupAffinity for group %d and mask %I64x for thread %d.\n", ga.Group, ga.Mask, threadID);
-                return;
-            }
-            pn.Group = group;
-            if (idStrategy == 1) {
-                pn.Number = (BYTE)(numCpus - 1 - pn.Number);
-            }
-            res = SetThreadIdealProcessorEx(GetCurrentThread(), &pn, NULL);
-            if (!res)
-            {
-                LOG(Helper::LogLevel::LL_Error, "Unable to set ideal processor for thread %d.\n", threadID);
-                return;
-            }
-            YieldProcessor();
-        }
-
-        void BatchReadFileAsync(std::vector<std::shared_ptr<Helper::DiskIO>>& handlers, AsyncReadRequest* readRequests, int num)
-        {
-            if (handlers.size() == 1) {
-                handlers[0]->BatchReadFile(readRequests, num);
-            }
-            else {
-                int currFileId = 0, currReqStart = 0;
-                for (int i = 0; i < num; i++) {
-                    AsyncReadRequest* readRequest = &(readRequests[i]);
-
-                    int fileid = (readRequest->m_status >> 16);
-                    if (fileid != currFileId) {
-                        handlers[currFileId]->BatchReadFile(readRequests + currReqStart, i - currReqStart);
-                        currFileId = fileid;
-                        currReqStart = i;
-                    }
-                }
-                if (currReqStart < num) {
-                    handlers[currFileId]->BatchReadFile(readRequests + currReqStart, num - currReqStart);
-                }
-            }
-        }
-#endif
     }
 }

@@ -3,31 +3,29 @@
 
 #include "Helper/ArgumentsParser.h"
 
-using namespace SPTAG::Helper;
 
-
-ArgumentsParser::IArgument::IArgument()
+SPTAG::Helper::ArgumentsParser::IArgument::IArgument()
 {
 }
 
 
-ArgumentsParser::IArgument::~IArgument()
+SPTAG::Helper::ArgumentsParser::IArgument::~IArgument()
 {
 }
 
 
-ArgumentsParser::ArgumentsParser()
+SPTAG::Helper::ArgumentsParser::ArgumentsParser()
 {
 }
 
 
-ArgumentsParser::~ArgumentsParser()
+SPTAG::Helper::ArgumentsParser::~ArgumentsParser()
 {
 }
 
 
 bool
-ArgumentsParser::Parse(int p_argc, char** p_args)
+SPTAG::Helper::ArgumentsParser::Parse(int p_argc, char** p_args)
 {
     while (p_argc > 0)
     {
@@ -73,7 +71,7 @@ ArgumentsParser::Parse(int p_argc, char** p_args)
 
 
 void
-ArgumentsParser::PrintHelp()
+SPTAG::Helper::ArgumentsParser::PrintHelp()
 {
     LOG(Helper::LogLevel::LL_Empty, "Usage: ");
     for (auto& option : m_arguments)

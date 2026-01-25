@@ -1,24 +1,20 @@
 #include "Utils/CommonUtils.h"
 #include "Utils/DistanceUtils.h"
 
-using namespace SPTAG;
-using namespace SPTAG::COMMON;
-
-
-#define DefineVectorValueType(Name, Type) template int Utils::GetBase<Type>();
+#define DefineVectorValueType(Name, Type) template int SPTAG::COMMON::Utils::GetBase<Type>();
 #include "Core/DefinitionList.h"
 #undef DefineVectorValueType
 
 template <typename T>
-void Utils::BatchNormalize(T* data, SizeType row, DimensionType col, int base, int threads) 
+void SPTAG::COMMON::Utils::BatchNormalize(T* data, SPTAG::SizeType row, SPTAG::DimensionType col, int base, int threads)
 {
 #pragma omp parallel for num_threads(threads)
-	for (SizeType i = 0; i < row; i++)
+	for (SPTAG::SizeType i = 0; i < row; i++)
 	{
 		SPTAG::COMMON::Utils::Normalize(data + i * (size_t)col, col, base);
 	}
 }
 
-#define DefineVectorValueType(Name, Type) template void Utils::BatchNormalize<Type>(Type* data, SizeType row, DimensionType col, int base, int threads);
+#define DefineVectorValueType(Name, Type) template void SPTAG::COMMON::Utils::BatchNormalize<Type>(Type* data, SPTAG::SizeType row, SPTAG::DimensionType col, int base, int threads);
 #include "Core/DefinitionList.h"
 #undef DefineVectorValueType

@@ -6,9 +6,9 @@
 
 typedef typename SPTAG::Helper::Concurrent::ConcurrentMap<std::string, SPTAG::SizeType> MetadataMap;
 
-using namespace SPTAG;
 
-MetaDataManager::MetaDataManager()
+
+SPTAG::MetaDataManager::MetaDataManager()
     : m_sIndexName("")
     , m_sMetadataFile("metadata.bin")
     , m_sMetadataIndexFile("metadataIndex.bin")
@@ -17,67 +17,67 @@ MetaDataManager::MetaDataManager()
 {
 }
 
-MetaDataManager::~MetaDataManager()
+SPTAG::MetaDataManager::~MetaDataManager()
 {
 }
 
 std::string
-MetaDataManager::GetIndexName() const
+SPTAG::MetaDataManager::GetIndexName() const
 {
     if (m_sIndexName == "") return "";
     return m_sIndexName;
 }
 
 void
-MetaDataManager::SetIndexName(const std::string& p_name)
+SPTAG::MetaDataManager::SetIndexName(const std::string& p_name)
 {
     m_sIndexName = p_name;
 }
 
 std::string
-MetaDataManager::GetMetadataFile() const
+SPTAG::MetaDataManager::GetMetadataFile() const
 {
     return m_sMetadataFile;
 }
 
 void
-MetaDataManager::SetMetadataFile(const std::string& p_file)
+SPTAG::MetaDataManager::SetMetadataFile(const std::string& p_file)
 {
     m_sMetadataFile = p_file;
 }
 
 std::string
-MetaDataManager::GetMetadataIndexFile() const
+SPTAG::MetaDataManager::GetMetadataIndexFile() const
 {
     return m_sMetadataIndexFile;
 }
 
 void
-MetaDataManager::SetMetadataIndexFile(const std::string& p_file)
+SPTAG::MetaDataManager::SetMetadataIndexFile(const std::string& p_file)
 {
     m_sMetadataIndexFile = p_file;
 }
 
 std::string
-MetaDataManager::GetQuantizerFile() const
+SPTAG::MetaDataManager::GetQuantizerFile() const
 {
     return m_sQuantizerFile;
 }
 
 void
-MetaDataManager::SetQuantizerFile(const std::string& p_file)
+SPTAG::MetaDataManager::SetQuantizerFile(const std::string& p_file)
 {
     m_sQuantizerFile = p_file;
 }
 
 bool
-MetaDataManager::HasMetaMapping() const
+SPTAG::MetaDataManager::HasMetaMapping() const
 {
     return nullptr != m_pMetaToVec;
 }
 
-SizeType
-MetaDataManager::GetMetaMapping(std::string& meta) const
+SPTAG::SizeType
+SPTAG::MetaDataManager::GetMetaMapping(std::string& meta) const
 {
     MetadataMap* ptr = static_cast<MetadataMap*>(m_pMetaToVec.get());
     auto iter = ptr->find(meta);
@@ -86,7 +86,7 @@ MetaDataManager::GetMetaMapping(std::string& meta) const
 }
 
 void
-MetaDataManager::UpdateMetaMapping(const std::string& meta, SizeType i)
+SPTAG::MetaDataManager::UpdateMetaMapping(const std::string& meta, SPTAG::SizeType i)
 {
     MetadataMap* ptr = static_cast<MetadataMap*>(m_pMetaToVec.get());
     auto iter = ptr->find(meta);
@@ -98,17 +98,17 @@ MetaDataManager::UpdateMetaMapping(const std::string& meta, SizeType i)
 
 template<typename ContainSampleFunc>
 void
-MetaDataManager::BuildMetaMapping(MetadataSet* p_metadata, SizeType p_vectorCount, ContainSampleFunc p_containSample, SizeType p_dataBlockSize, bool p_checkDeleted)
+SPTAG::MetaDataManager::BuildMetaMapping(SPTAG::MetadataSet* p_metadata, SPTAG::SizeType p_vectorCount, ContainSampleFunc p_containSample, SPTAG::SizeType p_dataBlockSize, bool p_checkDeleted)
 {
     MetadataMap* ptr = new MetadataMap(p_dataBlockSize);
-    for (SizeType i = 0; i < p_metadata->Count(); i++) {
+    for (SPTAG::SizeType i = 0; i < p_metadata->Count(); i++) {
         if (!p_checkDeleted || p_containSample(i)) {
-            ByteArray meta = p_metadata->GetMetadata(i);
+            SPTAG::ByteArray meta = p_metadata->GetMetadata(i);
             (*ptr)[std::string((char*)meta.Data(), meta.Length())] = i;
         }
     }
     m_pMetaToVec.reset(ptr, std::default_delete<MetadataMap>());
 }
 
-template void MetaDataManager::BuildMetaMapping<bool(*)(SizeType)>(MetadataSet*, SizeType, bool (*)(SizeType), SizeType, bool);
-template void MetaDataManager::BuildMetaMapping<std::function<bool(SizeType)>>(MetadataSet*, SizeType, std::function<bool(SizeType)>, SizeType, bool);
+template void SPTAG::MetaDataManager::BuildMetaMapping<bool(*)(SPTAG::SizeType)>(SPTAG::MetadataSet*, SPTAG::SizeType, bool (*)(SPTAG::SizeType), SPTAG::SizeType, bool);
+template void SPTAG::MetaDataManager::BuildMetaMapping<std::function<bool(SPTAG::SizeType)>>(SPTAG::MetadataSet*, SPTAG::SizeType, std::function<bool(SPTAG::SizeType)>, SPTAG::SizeType, bool);

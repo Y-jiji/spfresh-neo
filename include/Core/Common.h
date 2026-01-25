@@ -15,7 +15,6 @@
 #include "Helper/Logging.h"
 #include "Helper/DiskIO.h"
 
-#ifndef _MSC_VER
 #include <stdio.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -61,49 +60,6 @@ inline T max(T a, T b) {
 #define strtok_s(a, b, c) strtok_r(a, b, c)
 #define ALIGN_ROUND(size) ((size) + 31) / 32 * 32
 
-#else
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif // !WIN32_LEAN_AND_MEAN
-
-#include <Windows.h>
-#include <Psapi.h>
-#include <malloc.h>
-
-#define FolderSep '\\'
-
-inline bool direxists(const TCHAR* path) {
-    auto dwAttr = GetFileAttributes(path);
-    return (dwAttr != INVALID_FILE_ATTRIBUTES) && (dwAttr & FILE_ATTRIBUTE_DIRECTORY);
-}
-inline bool fileexists(const TCHAR* path) {
-    auto dwAttr = GetFileAttributes(path);
-    return (dwAttr != INVALID_FILE_ATTRIBUTES) && (dwAttr & FILE_ATTRIBUTE_DIRECTORY) == 0;
-}
-#define mkdir(a) CreateDirectory(a, NULL)
-
-#ifndef max
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef min
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-
-FORCEINLINE
-char
-InterlockedCompareExchange(
-    _Inout_ _Interlocked_operand_ char volatile* Destination,
-    _In_ char Exchange,
-    _In_ char Comperand
-)
-{
-    return (char)_InterlockedCompareExchange8(Destination, Exchange, Comperand);
-}
-
-#endif
-
 namespace SPTAG
 {
 #if (__cplusplus < 201703L)
@@ -147,11 +103,7 @@ private:
     std::string Exp;
 public:
     MyException(std::string e) { Exp = e; }
-#ifdef _MSC_VER
-    const char* what() const { return Exp.c_str(); }
-#else
     const char* what() const noexcept { return Exp.c_str(); }
-#endif
 };
 
 enum class ErrorCode : std::uint16_t
@@ -229,7 +181,7 @@ template<> \
 constexpr VectorValueType GetEnumValueType<Type>() \
 { \
     return VectorValueType::Name; \
-} \
+}
 
 #include "DefinitionList.h"
 #undef DefineVectorValueType

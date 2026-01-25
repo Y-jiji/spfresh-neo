@@ -3,16 +3,8 @@
 
 #include "Utils/DistanceUtils.h"
 
-using namespace SPTAG;
-using namespace SPTAG::COMMON;
-
-#ifndef _MSC_VER
 #define DIFF128 diff128
 #define DIFF256 diff256
-#else
-#define DIFF128 diff128.m128_f32
-#define DIFF256 diff256.m256_f32
-#endif
 
 inline __m128 _mm_mul_epi8(__m128i X, __m128i Y)
 {
@@ -192,8 +184,6 @@ inline __m256 _mm256_sqdf_ps(__m256 X, __m256 Y)
     return _mm256_mul_ps(d, d);
 }
 
-// Do not use intrinsics not supported by old MS compiler version
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
 inline __m512 _mm512_mul_epi8(__m512i X, __m512i Y)
 {
     __m512i zero = _mm512_setzero_si512();
@@ -291,7 +281,6 @@ inline __m512 _mm512_sqdf_ps(__m512 X, __m512 Y)
     __m512 d = _mm512_sub_ps(X, Y);
     return _mm512_mul_ps(d, d);
 }
-#endif
 
 
 #define REPEAT(type, ctype, delta, load, exec, acc, result) \
@@ -302,7 +291,7 @@ inline __m512 _mm512_sqdf_ps(__m512 X, __m512 Y)
                 result = acc(result, exec(c1, c2)); \
             } \
 
-float DistanceUtils::ComputeL2Distance_SSE(const std::int8_t* pX, const std::int8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_SSE(const std::int8_t* pX, const std::int8_t* pY, SPTAG::DimensionType length)
 {
     const std::int8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::int8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -331,7 +320,7 @@ float DistanceUtils::ComputeL2Distance_SSE(const std::int8_t* pX, const std::int
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX(const std::int8_t* pX, const std::int8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX(const std::int8_t* pX, const std::int8_t* pY, SPTAG::DimensionType length)
 {
     const std::int8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::int8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -360,23 +349,19 @@ float DistanceUtils::ComputeL2Distance_AVX(const std::int8_t* pX, const std::int
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX512(const std::int8_t* pX, const std::int8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX512(const std::int8_t* pX, const std::int8_t* pY, SPTAG::DimensionType length)
 {
     const std::int8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::int8_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int8_t* pEnd4 = pX + ((length >> 2) << 2);
     const std::int8_t* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const std::int8_t* pEnd64 = pX + ((length >> 6) << 6);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd64) {
         REPEAT(__m512i, __m512i, 64, _mm512_loadu_si512, _mm512_sqdf_epi8, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd32) {
         REPEAT(__m256i, __m256i, 32, _mm256_loadu_si256, _mm256_sqdf_epi8, _mm256_add_ps, diff256)
@@ -399,7 +384,7 @@ float DistanceUtils::ComputeL2Distance_AVX512(const std::int8_t* pX, const std::
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_SSE(const std::uint8_t* pX, const std::uint8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_SSE(const std::uint8_t* pX, const std::uint8_t* pY, SPTAG::DimensionType length)
 {
     const std::uint8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::uint8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -428,7 +413,7 @@ float DistanceUtils::ComputeL2Distance_SSE(const std::uint8_t* pX, const std::ui
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX(const std::uint8_t* pX, const std::uint8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX(const std::uint8_t* pX, const std::uint8_t* pY, SPTAG::DimensionType length)
 {
     const std::uint8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::uint8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -457,23 +442,19 @@ float DistanceUtils::ComputeL2Distance_AVX(const std::uint8_t* pX, const std::ui
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX512(const std::uint8_t* pX, const std::uint8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX512(const std::uint8_t* pX, const std::uint8_t* pY, SPTAG::DimensionType length)
 {
     const std::uint8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::uint8_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::uint8_t* pEnd4 = pX + ((length >> 2) << 2);
     const std::uint8_t* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const std::uint8_t* pEnd64 = pX + ((length >> 6) << 6);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd64) {
         REPEAT(__m512i, __m512i, 64, _mm512_loadu_si512, _mm512_sqdf_epu8, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd32) {
         REPEAT(__m256i, __m256i, 32, _mm256_loadu_si256, _mm256_sqdf_epu8, _mm256_add_ps, diff256)
@@ -496,7 +477,7 @@ float DistanceUtils::ComputeL2Distance_AVX512(const std::uint8_t* pX, const std:
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_SSE(const std::int16_t* pX, const std::int16_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_SSE(const std::int16_t* pX, const std::int16_t* pY, SPTAG::DimensionType length)
 {
     const std::int16_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int16_t* pEnd8 = pX + ((length >> 3) << 3);
@@ -526,7 +507,7 @@ float DistanceUtils::ComputeL2Distance_SSE(const std::int16_t* pX, const std::in
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX(const std::int16_t* pX, const std::int16_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX(const std::int16_t* pX, const std::int16_t* pY, SPTAG::DimensionType length)
 {
     const std::int16_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int16_t* pEnd8 = pX + ((length >> 3) << 3);
@@ -556,23 +537,19 @@ float DistanceUtils::ComputeL2Distance_AVX(const std::int16_t* pX, const std::in
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX512(const std::int16_t* pX, const std::int16_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX512(const std::int16_t* pX, const std::int16_t* pY, SPTAG::DimensionType length)
 {
     const std::int16_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int16_t* pEnd8 = pX + ((length >> 3) << 3);
     const std::int16_t* pEnd4 = pX + ((length >> 2) << 2);
     const std::int16_t* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const std::int16_t* pEnd32 = pX + ((length >> 5) << 5);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd32) {
         REPEAT(__m512i, __m512i, 32, _mm512_loadu_si512, _mm512_sqdf_epi16, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd16) {
         REPEAT(__m256i, __m256i, 16, _mm256_loadu_si256, _mm256_sqdf_epi16, _mm256_add_ps, diff256)
@@ -596,7 +573,7 @@ float DistanceUtils::ComputeL2Distance_AVX512(const std::int16_t* pX, const std:
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_SSE(const float* pX, const float* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_SSE(const float* pX, const float* pY, SPTAG::DimensionType length)
 {
     const float* pEnd16 = pX + ((length >> 4) << 4);
     const float* pEnd4 = pX + ((length >> 2) << 2);
@@ -622,7 +599,7 @@ float DistanceUtils::ComputeL2Distance_SSE(const float* pX, const float* pY, Dim
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX(const float* pX, const float* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX(const float* pX, const float* pY, SPTAG::DimensionType length)
 {
     const float* pEnd16 = pX + ((length >> 4) << 4);
     const float* pEnd4 = pX + ((length >> 2) << 2);
@@ -647,22 +624,18 @@ float DistanceUtils::ComputeL2Distance_AVX(const float* pX, const float* pY, Dim
     return diff;
 }
 
-float DistanceUtils::ComputeL2Distance_AVX512(const float* pX, const float* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeL2Distance_AVX512(const float* pX, const float* pY, SPTAG::DimensionType length)
 {
     const float* pEnd8 = pX + ((length >> 3) << 3);
     const float* pEnd4 = pX + ((length >> 2) << 2);
     const float* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const float* pEnd16 = pX + ((length >> 4) << 4);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd16) {
         REPEAT(__m512, const float, 16, _mm512_loadu_ps, _mm512_sqdf_ps, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd8)
     {
@@ -681,7 +654,7 @@ float DistanceUtils::ComputeL2Distance_AVX512(const float* pX, const float* pY, 
     return diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_SSE(const std::int8_t* pX, const std::int8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_SSE(const std::int8_t* pX, const std::int8_t* pY, SPTAG::DimensionType length)
 {
     const std::int8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::int8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -709,7 +682,7 @@ float DistanceUtils::ComputeCosineDistance_SSE(const std::int8_t* pX, const std:
     return 16129 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX(const std::int8_t* pX, const std::int8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX(const std::int8_t* pX, const std::int8_t* pY, SPTAG::DimensionType length)
 {
     const std::int8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::int8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -737,23 +710,19 @@ float DistanceUtils::ComputeCosineDistance_AVX(const std::int8_t* pX, const std:
     return 16129 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX512(const std::int8_t* pX, const std::int8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX512(const std::int8_t* pX, const std::int8_t* pY, SPTAG::DimensionType length)
 {
     const std::int8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::int8_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int8_t* pEnd4 = pX + ((length >> 2) << 2);
     const std::int8_t* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const std::int8_t* pEnd64 = pX + ((length >> 6) << 6);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd64) {
         REPEAT(__m512i, __m512i, 64, _mm512_loadu_si512, _mm512_mul_epi8, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd32) {
         REPEAT(__m256i, __m256i, 32, _mm256_loadu_si256, _mm256_mul_epi8, _mm256_add_ps, diff256)
@@ -775,7 +744,7 @@ float DistanceUtils::ComputeCosineDistance_AVX512(const std::int8_t* pX, const s
     return 16129 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_SSE(const std::uint8_t* pX, const std::uint8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_SSE(const std::uint8_t* pX, const std::uint8_t* pY, SPTAG::DimensionType length)
 {
     const std::uint8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::uint8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -803,7 +772,7 @@ float DistanceUtils::ComputeCosineDistance_SSE(const std::uint8_t* pX, const std
     return 65025 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX(const std::uint8_t* pX, const std::uint8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX(const std::uint8_t* pX, const std::uint8_t* pY, SPTAG::DimensionType length)
 {
     const std::uint8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::uint8_t* pEnd16 = pX + ((length >> 4) << 4);
@@ -831,23 +800,19 @@ float DistanceUtils::ComputeCosineDistance_AVX(const std::uint8_t* pX, const std
     return 65025 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX512(const std::uint8_t* pX, const std::uint8_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX512(const std::uint8_t* pX, const std::uint8_t* pY, SPTAG::DimensionType length)
 {
     const std::uint8_t* pEnd32 = pX + ((length >> 5) << 5);
     const std::uint8_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::uint8_t* pEnd4 = pX + ((length >> 2) << 2);
     const std::uint8_t* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const std::uint8_t* pEnd64 = pX + ((length >> 6) << 6);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd64) {
         REPEAT(__m512i, __m512i, 64, _mm512_loadu_si512, _mm512_mul_epu8, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd32) {
         REPEAT(__m256i, __m256i, 32, _mm256_loadu_si256, _mm256_mul_epu8, _mm256_add_ps, diff256)
@@ -869,7 +834,7 @@ float DistanceUtils::ComputeCosineDistance_AVX512(const std::uint8_t* pX, const 
     return 65025 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_SSE(const std::int16_t* pX, const std::int16_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_SSE(const std::int16_t* pX, const std::int16_t* pY, SPTAG::DimensionType length)
 {
     const std::int16_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int16_t* pEnd8 = pX + ((length >> 3) << 3);
@@ -898,7 +863,7 @@ float DistanceUtils::ComputeCosineDistance_SSE(const std::int16_t* pX, const std
     return  1073676289 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX(const std::int16_t* pX, const std::int16_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX(const std::int16_t* pX, const std::int16_t* pY, SPTAG::DimensionType length)
 {
     const std::int16_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int16_t* pEnd8 = pX + ((length >> 3) << 3);
@@ -927,23 +892,19 @@ float DistanceUtils::ComputeCosineDistance_AVX(const std::int16_t* pX, const std
     return  1073676289 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX512(const std::int16_t* pX, const std::int16_t* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX512(const std::int16_t* pX, const std::int16_t* pY, SPTAG::DimensionType length)
 {
     const std::int16_t* pEnd16 = pX + ((length >> 4) << 4);
     const std::int16_t* pEnd8 = pX + ((length >> 3) << 3);
     const std::int16_t* pEnd4 = pX + ((length >> 2) << 2);
     const std::int16_t* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const std::int16_t* pEnd32 = pX + ((length >> 5) << 5);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd32) {
         REPEAT(__m512i, __m512i, 32, _mm512_loadu_si512, _mm512_mul_epi16, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd16) {
         REPEAT(__m256i, __m256i, 16, _mm256_loadu_si256, _mm256_mul_epi16, _mm256_add_ps, diff256)
@@ -966,7 +927,7 @@ float DistanceUtils::ComputeCosineDistance_AVX512(const std::int16_t* pX, const 
     return  1073676289 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_SSE(const float* pX, const float* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_SSE(const float* pX, const float* pY, SPTAG::DimensionType length)
 {
     const float* pEnd16 = pX + ((length >> 4) << 4);
     const float* pEnd4 = pX + ((length >> 2) << 2);
@@ -990,7 +951,7 @@ float DistanceUtils::ComputeCosineDistance_SSE(const float* pX, const float* pY,
     return 1 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX(const float* pX, const float* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX(const float* pX, const float* pY, SPTAG::DimensionType length)
 {
     const float* pEnd16 = pX + ((length >> 4) << 4);
     const float* pEnd4 = pX + ((length >> 2) << 2);
@@ -1013,22 +974,18 @@ float DistanceUtils::ComputeCosineDistance_AVX(const float* pX, const float* pY,
     return 1 - diff;
 }
 
-float DistanceUtils::ComputeCosineDistance_AVX512(const float* pX, const float* pY, DimensionType length)
+float SPTAG::COMMON::DistanceUtils::ComputeCosineDistance_AVX512(const float* pX, const float* pY, SPTAG::DimensionType length)
 {
     const float* pEnd8 = pX + ((length >> 3) << 3);
     const float* pEnd4 = pX + ((length >> 2) << 2);
     const float* pEnd1 = pX + length;
 
-#if (!defined _MSC_VER) || (_MSC_VER >= 1920)
     const float* pEnd16 = pX + ((length >> 4) << 4);
     __m512 diff512 = _mm512_setzero_ps();
     while (pX < pEnd16) {
         REPEAT(__m512, const float, 16, _mm512_loadu_ps, _mm512_mul_ps, _mm512_add_ps, diff512)
     }
     __m256 diff256 = _mm256_add_ps(_mm512_castps512_ps256(diff512), _mm512_extractf32x8_ps(diff512, 1));
-#else
-    __m256 diff256 = _mm256_setzero_ps();
-#endif
 
     while (pX < pEnd8)
     {

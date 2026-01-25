@@ -13,7 +13,7 @@
 
 #include "SPFresh/SPFresh.h"
  
-using namespace SPTAG;
+
 
 // switch between exe and static library by _$(OutputType) 
 #ifdef _exe
@@ -21,12 +21,12 @@ using namespace SPTAG;
 int main(int argc, char* argv[]) {
 	if (argc < 2)
 	{
-		LOG(Helper::LogLevel::LL_Error,
+		SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error,
 			"spfresh storePath\n");
 		exit(-1);
 	}
 
-	auto ret = SSDServing::SPFresh::UpdateTest(argv[1]);
+	auto ret = SPTAG::SSDServing::SPFresh::UpdateTest(argv[1]);
 	return ret;
 }
 

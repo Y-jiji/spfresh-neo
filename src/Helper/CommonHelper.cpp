@@ -6,11 +6,8 @@
 #include <cctype>
 #include <functional>
 
-using namespace SPTAG;
-using namespace SPTAG::Helper;
-
 void
-StrUtils::ToLowerInPlace(std::string& p_str)
+SPTAG::Helper::StrUtils::ToLowerInPlace(std::string& p_str)
 {
     for (char& ch : p_str)
     {
@@ -23,7 +20,7 @@ StrUtils::ToLowerInPlace(std::string& p_str)
 
 
 std::vector<std::string>
-StrUtils::SplitString(const std::string& p_str, const std::string& p_separator)
+SPTAG::Helper::StrUtils::SplitString(const std::string& p_str, const std::string& p_separator)
 {
     std::vector<std::string> ret;
 
@@ -49,7 +46,7 @@ StrUtils::SplitString(const std::string& p_str, const std::string& p_separator)
 
 
 std::pair<const char*, const char*>
-StrUtils::FindTrimmedSegment(const char* p_begin,
+SPTAG::Helper::StrUtils::FindTrimmedSegment(const char* p_begin,
                              const char* p_end,
                              const std::function<bool(char)>& p_isSkippedChar)
 {
@@ -78,7 +75,7 @@ StrUtils::FindTrimmedSegment(const char* p_begin,
 
 
 bool
-StrUtils::StartsWith(const char* p_str, const char* p_prefix)
+SPTAG::Helper::StrUtils::StartsWith(const char* p_str, const char* p_prefix)
 {
     if (nullptr == p_prefix)
     {
@@ -105,7 +102,7 @@ StrUtils::StartsWith(const char* p_str, const char* p_prefix)
 
 
 bool
-StrUtils::StrEqualIgnoreCase(const char* p_left, const char* p_right)
+SPTAG::Helper::StrUtils::StrEqualIgnoreCase(const char* p_left, const char* p_right)
 {
     if (p_left == p_right)
     {
@@ -143,7 +140,7 @@ StrUtils::StrEqualIgnoreCase(const char* p_left, const char* p_right)
 
 
 std::string
-StrUtils::ReplaceAll(const std::string& orig, const std::string& from, const std::string& to)
+SPTAG::Helper::StrUtils::ReplaceAll(const std::string& orig, const std::string& from, const std::string& to)
 {
     std::string ret = orig;
     if (from.empty()) return ret;
