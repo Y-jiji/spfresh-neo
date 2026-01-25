@@ -8,7 +8,6 @@
 #include "Helper/ConcurrentSet.h"
 
 #include "Core/BKT/Index.h"
-#include "Core/KDT/Index.h"
 #include "Core/SPANN/Index.h"
 
 typedef typename SPTAG::Helper::Concurrent::ConcurrentMap<std::string, SPTAG::SizeType> MetadataMap;
@@ -560,19 +559,6 @@ VectorIndex::CreateInstance(IndexAlgoType p_algo, VectorValueType p_valuetype)
         default: break;
         }
     }
-    else if (p_algo == IndexAlgoType::KDT) {
-        switch (p_valuetype)
-        {
-#define DefineVectorValueType(Name, Type) \
-    case VectorValueType::Name: \
-        return std::shared_ptr<VectorIndex>(new KDT::Index<Type>); \
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-        default: break;
-        }
-    }
     else if (p_algo == IndexAlgoType::SPANN) {
         switch (p_valuetype)
         {
@@ -773,9 +759,6 @@ std::uint64_t VectorIndex::EstimatedVectorCount(std::uint64_t p_memory, Dimensio
     if (p_algo == IndexAlgoType::BKT) {
         treeNodeSize = sizeof(SizeType) * 3;
     }
-    else if (p_algo == IndexAlgoType::KDT) {
-        treeNodeSize = sizeof(SizeType) * 2 + sizeof(DimensionType) + sizeof(float);
-    }
     else {
         return 0;
     }
@@ -790,9 +773,6 @@ std::uint64_t VectorIndex::EstimatedMemoryUsage(std::uint64_t p_vectorCount, Dim
     size_t treeNodeSize;
     if (p_algo == IndexAlgoType::BKT) {
         treeNodeSize = sizeof(SizeType) * 3;
-    }
-    else if (p_algo == IndexAlgoType::KDT) {
-        treeNodeSize = sizeof(SizeType) * 2 + sizeof(DimensionType) + sizeof(float);
     }
     else {
         return 0;

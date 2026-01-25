@@ -90,7 +90,6 @@ DefineErrorCode(Socket_FailedConnectToEndPoint, 0x4001)
 #ifdef DefineIndexAlgo
 
 DefineIndexAlgo(BKT)
-DefineIndexAlgo(KDT)
 DefineIndexAlgo(SPANN)
 
 #endif // DefineIndexAlgo
