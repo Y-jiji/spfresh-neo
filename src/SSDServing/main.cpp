@@ -20,79 +20,57 @@ using namespace SPTAG;
 namespace SPTAG {
 	namespace SSDServing {
 
-		int BootProgram(bool forANNIndexTestTool, 
-			std::map<std::string, std::map<std::string, std::string>>* config_map, 
-			const char* configurationPath, 
-			VectorValueType valueType,
-			DistCalcMethod distCalcMethod,
-			const char* dataFilePath, 
-			const char* indexFilePath) {
+		int BootProgram(std::map<std::string, std::map<std::string, std::string>>* config_map,
+			const char* configurationPath) {
 
+			VectorValueType valueType = VectorValueType::Undefined;
+			DistCalcMethod distCalcMethod = DistCalcMethod::Undefined;
 
 			bool searchSSD = false;
 			std::string QuantizerFilePath = "";
-			if (forANNIndexTestTool) {
-				(*config_map)[SEC_BASE]["ValueType"] = Helper::Convert::ConvertToString(valueType);
-				(*config_map)[SEC_BASE]["DistCalcMethod"] = Helper::Convert::ConvertToString(distCalcMethod);
-				(*config_map)[SEC_BASE]["VectorPath"] = dataFilePath;
-				(*config_map)[SEC_BASE]["IndexDirectory"] = indexFilePath;
+			Helper::IniReader iniReader;
+			iniReader.LoadIniFile(configurationPath);
+			(*config_map)[SEC_BASE] = iniReader.GetParameters(SEC_BASE);
+			(*config_map)[SEC_SELECT_HEAD] = iniReader.GetParameters(SEC_SELECT_HEAD);
+			(*config_map)[SEC_BUILD_HEAD] = iniReader.GetParameters(SEC_BUILD_HEAD);
+			(*config_map)[SEC_BUILD_SSD_INDEX] = iniReader.GetParameters(SEC_BUILD_SSD_INDEX);
 
-				(*config_map)[SEC_BUILD_HEAD]["KDTNumber"] = "2";
-				(*config_map)[SEC_BUILD_HEAD]["NeighborhoodSize"] = "32";
-				(*config_map)[SEC_BUILD_HEAD]["TPTNumber"] = "32";
-				(*config_map)[SEC_BUILD_HEAD]["TPTLeafSize"] = "2000";
-				(*config_map)[SEC_BUILD_HEAD]["MaxCheck"] = "4096";
-				(*config_map)[SEC_BUILD_HEAD]["MaxCheckForRefineGraph"] = "4096";
-				(*config_map)[SEC_BUILD_HEAD]["RefineIterations"] = "3";
-				(*config_map)[SEC_BUILD_HEAD]["GraphNeighborhoodScale"] = "1";
-				(*config_map)[SEC_BUILD_HEAD]["GraphCEFScale"] = "1";
+			valueType = iniReader.GetParameter(SEC_BASE, "ValueType", valueType);
+			distCalcMethod = iniReader.GetParameter(SEC_BASE, "DistCalcMethod", distCalcMethod);
+			bool buildSSD = iniReader.GetParameter(SEC_BUILD_SSD_INDEX, "isExecute", false);
+			searchSSD = iniReader.GetParameter(SEC_SEARCH_SSD_INDEX, "isExecute", false);
+			QuantizerFilePath = iniReader.GetParameter(SEC_BASE, "QuantizerFilePath", std::string(""));
 
-				(*config_map)[SEC_BASE]["DeleteHeadVectors"] = "true";
-				(*config_map)[SEC_SELECT_HEAD]["isExecute"] = "true";
-				(*config_map)[SEC_BUILD_HEAD]["isExecute"] = "true";
-				(*config_map)[SEC_BUILD_SSD_INDEX]["isExecute"] = "true";
-				(*config_map)[SEC_BUILD_SSD_INDEX]["BuildSsdIndex"] = "true";
-
-				std::map<std::string, std::string>::iterator iter;
-				if ((iter = (*config_map)[SEC_BASE].find("QuantizerFilePath")) != (*config_map)[SEC_BASE].end()) {
-					QuantizerFilePath = iter->second;
-				}
-			}
-			else {
-				Helper::IniReader iniReader;
-				iniReader.LoadIniFile(configurationPath);
-				(*config_map)[SEC_BASE] = iniReader.GetParameters(SEC_BASE);
-				(*config_map)[SEC_SELECT_HEAD] = iniReader.GetParameters(SEC_SELECT_HEAD);
-				(*config_map)[SEC_BUILD_HEAD] = iniReader.GetParameters(SEC_BUILD_HEAD);
-				(*config_map)[SEC_BUILD_SSD_INDEX] = iniReader.GetParameters(SEC_BUILD_SSD_INDEX);
-
-				valueType = iniReader.GetParameter(SEC_BASE, "ValueType", valueType);
-				distCalcMethod = iniReader.GetParameter(SEC_BASE, "DistCalcMethod", distCalcMethod);
-				bool buildSSD = iniReader.GetParameter(SEC_BUILD_SSD_INDEX, "isExecute", false);
-				searchSSD = iniReader.GetParameter(SEC_SEARCH_SSD_INDEX, "isExecute", false);
-				QuantizerFilePath = iniReader.GetParameter(SEC_BASE, "QuantizerFilePath", std::string(""));
-
-				for (auto& KV : iniReader.GetParameters(SEC_SEARCH_SSD_INDEX)) {
-					std::string param = KV.first, value = KV.second;
-					if (buildSSD && Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "BuildSsdIndex")) continue;
-					if (buildSSD && Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "isExecute")) continue;
-					if (Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "PostingPageLimit")) param = "SearchPostingPageLimit";
-					if (Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "InternalResultNum")) param = "SearchInternalResultNum";
-					(*config_map)[SEC_BUILD_SSD_INDEX][param] = value;
-				}
+			for (auto& KV : iniReader.GetParameters(SEC_SEARCH_SSD_INDEX)) {
+				std::string param = KV.first, value = KV.second;
+				if (buildSSD && Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "BuildSsdIndex")) continue;
+				if (buildSSD && Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "isExecute")) continue;
+				if (Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "PostingPageLimit")) param = "SearchPostingPageLimit";
+				if (Helper::StrUtils::StrEqualIgnoreCase(param.c_str(), "InternalResultNum")) param = "SearchInternalResultNum";
+				(*config_map)[SEC_BUILD_SSD_INDEX][param] = value;
 			}
 
 
 			LOG(Helper::LogLevel::LL_Info, "Set QuantizerFile = %s\n", QuantizerFilePath.c_str());
 
-			std::shared_ptr<VectorIndex> index = VectorIndex::CreateInstance(IndexAlgoType::SPANN, valueType);
+			std::shared_ptr<VectorIndex> index;
+			switch (valueType)
+			{
+#define DefineVectorValueType(Name, Type) \
+	case VectorValueType::Name: \
+		index = std::shared_ptr<VectorIndex>(new SPANN::Index<Type>); \
+		break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+				default:
+					LOG(Helper::LogLevel::LL_Error, "Cannot create Index with ValueType %s!\n", (*config_map)[SEC_BASE]["ValueType"].c_str());
+					return -1;
+			}
+
 			if (!QuantizerFilePath.empty() && index->LoadQuantizer(QuantizerFilePath) != ErrorCode::Success)
 			{
 				exit(1);
-			}
-			if (index == nullptr) {
-				LOG(Helper::LogLevel::LL_Error, "Cannot create Index with ValueType %s!\n", (*config_map)[SEC_BASE]["ValueType"].c_str());
-				return -1;
 			}
 
 			for (auto& sectionKV : *config_map) {
@@ -189,7 +167,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::map<std::string, std::map<std::string, std::string>> my_map;
-	auto ret = SSDServing::BootProgram(false, &my_map, argv[1]);
+	auto ret = SSDServing::BootProgram(&my_map, argv[1]);
 	return ret;
 }
 

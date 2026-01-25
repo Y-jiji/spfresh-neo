@@ -538,44 +538,6 @@ VectorIndex::LoadQuantizer(std::string p_quantizerFile)
 }
 
 
-std::shared_ptr<VectorIndex>
-VectorIndex::CreateInstance(IndexAlgoType p_algo, VectorValueType p_valuetype)
-{
-    if (IndexAlgoType::Undefined == p_algo || VectorValueType::Undefined == p_valuetype)
-    {
-        return nullptr;
-    }
-
-    if (p_algo == IndexAlgoType::BKT) {
-        switch (p_valuetype)
-        {
-#define DefineVectorValueType(Name, Type) \
-    case VectorValueType::Name: \
-        return std::shared_ptr<VectorIndex>(new BKT::Index<Type>); \
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-        default: break;
-        }
-    }
-    else if (p_algo == IndexAlgoType::SPANN) {
-        switch (p_valuetype)
-        {
-#define DefineVectorValueType(Name, Type) \
-    case VectorValueType::Name: \
-        return std::shared_ptr<VectorIndex>(new SPANN::Index<Type>); \
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-        default: break;
-        }
-    }
-    return nullptr;
-}
-
-
 ErrorCode
 VectorIndex::LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<VectorIndex>& p_vectorIndex)
 {
@@ -590,7 +552,42 @@ VectorIndex::LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<Vect
     }
     IndexAlgoType algoType = iniReader.GetParameter("Index", "IndexAlgoType", IndexAlgoType::Undefined);
     VectorValueType valueType = iniReader.GetParameter("Index", "ValueType", VectorValueType::Undefined);
-    if ((p_vectorIndex = CreateInstance(algoType, valueType)) == nullptr) return ErrorCode::FailedParseValue;
+
+    if (IndexAlgoType::Undefined == algoType || VectorValueType::Undefined == valueType)
+    {
+        return ErrorCode::FailedParseValue;
+    }
+
+    if (algoType == IndexAlgoType::BKT) {
+        switch (valueType)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        p_vectorIndex = std::shared_ptr<VectorIndex>(new BKT::Index<Type>); \
+        break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+    else if (algoType == IndexAlgoType::SPANN) {
+        switch (valueType)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        p_vectorIndex = std::shared_ptr<VectorIndex>(new SPANN::Index<Type>); \
+        break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+
+    if (p_vectorIndex == nullptr) return ErrorCode::FailedParseValue;
 
     ErrorCode ret = ErrorCode::Success;
     if ((ret = p_vectorIndex->LoadIndexConfig(iniReader)) != ErrorCode::Success) return ret;
@@ -663,10 +660,44 @@ VectorIndex::LoadIndexFromFile(const std::string& p_file, std::shared_ptr<Vector
     IndexAlgoType algoType = iniReader.GetParameter("Index", "IndexAlgoType", IndexAlgoType::Undefined);
     VectorValueType valueType = iniReader.GetParameter("Index", "ValueType", VectorValueType::Undefined);
 
+    if (IndexAlgoType::Undefined == algoType || VectorValueType::Undefined == valueType)
+    {
+        return ErrorCode::FailedParseValue;
+    }
+
+    if (algoType == IndexAlgoType::BKT) {
+        switch (valueType)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        p_vectorIndex = std::shared_ptr<VectorIndex>(new BKT::Index<Type>); \
+        break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+    else if (algoType == IndexAlgoType::SPANN) {
+        switch (valueType)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        p_vectorIndex = std::shared_ptr<VectorIndex>(new SPANN::Index<Type>); \
+        break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+
+    if (p_vectorIndex == nullptr) return ErrorCode::FailedParseValue;
+
     ErrorCode ret = ErrorCode::Success;
 
-    if ((p_vectorIndex = CreateInstance(algoType, valueType)) == nullptr) return ErrorCode::FailedParseValue;
-    
     if ((ret = p_vectorIndex->LoadIndexConfig(iniReader)) != ErrorCode::Success) return ret;
 
     std::uint64_t blobs;
@@ -713,9 +744,43 @@ VectorIndex::LoadIndex(const std::string& p_config, const std::vector<ByteArray>
     IndexAlgoType algoType = iniReader.GetParameter("Index", "IndexAlgoType", IndexAlgoType::Undefined);
     VectorValueType valueType = iniReader.GetParameter("Index", "ValueType", VectorValueType::Undefined);
 
-    ErrorCode ret = ErrorCode::Success;
+    if (IndexAlgoType::Undefined == algoType || VectorValueType::Undefined == valueType)
+    {
+        return ErrorCode::FailedParseValue;
+    }
 
-    if ((p_vectorIndex = CreateInstance(algoType, valueType)) == nullptr) return ErrorCode::FailedParseValue;
+    if (algoType == IndexAlgoType::BKT) {
+        switch (valueType)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        p_vectorIndex = std::shared_ptr<VectorIndex>(new BKT::Index<Type>); \
+        break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+    else if (algoType == IndexAlgoType::SPANN) {
+        switch (valueType)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        p_vectorIndex = std::shared_ptr<VectorIndex>(new SPANN::Index<Type>); \
+        break; \
+
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+
+    if (p_vectorIndex == nullptr) return ErrorCode::FailedParseValue;
+
+    ErrorCode ret = ErrorCode::Success;
     if (!iniReader.GetParameter<std::string>("Base", "QuantizerFilePath", std::string()).empty())
     {
         p_vectorIndex->SetQuantizer(COMMON::IQuantizer::LoadIQuantizer(p_indexBlobs[4]));

@@ -898,7 +898,8 @@ namespace SPTAG {
 
                 bool calTruthOrigin = p_opts.m_calTruth;
 
-                p_index->ForceCompaction();
+                // ForceCompaction is KV-only, no longer supported
+                // p_index->ForceCompaction();
 
                 p_index->GetDBStat();
 
@@ -1120,7 +1121,8 @@ namespace SPTAG {
                     insertCount = p_opts.m_endVectorNum - curCount;
                 }
 
-                p_index->ForceCompaction();
+                // ForceCompaction is KV-only, no longer supported
+                // p_index->ForceCompaction();
 
                 p_index->GetDBStat();
 

@@ -9,13 +9,8 @@
 namespace SPTAG {
 	namespace SSDServing {
 
-		int BootProgram(bool forANNIndexTestTool,
-			std::map<std::string, std::map<std::string, std::string>>* config_map,
-			const char* configurationPath = nullptr,
-			SPTAG::VectorValueType valueType = SPTAG::VectorValueType::Undefined,
-			SPTAG::DistCalcMethod distCalcMethod = SPTAG::DistCalcMethod::Undefined,
-			const char* dataFilePath = nullptr,
-			const char* indexFilePath = nullptr);
+		int BootProgram(std::map<std::string, std::map<std::string, std::string>>* config_map,
+			const char* configurationPath = nullptr);
 
 		const std::string SEC_BASE = "Base";
 		const std::string SEC_SELECT_HEAD = "SelectHead";

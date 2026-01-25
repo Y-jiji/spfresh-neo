@@ -157,16 +157,14 @@ namespace SPTAG
             ErrorCode BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>& p_reader);
 
         public:
-            bool AllFinished() { if (m_options.m_useKV || m_options.m_useSPDK) return m_extraSearcher->AllFinished(); return true; }
+            bool AllFinished() { return m_extraSearcher->AllFinished(); }
 
-            void GetDBStat() { 
-                if (m_options.m_useKV || m_options.m_useSPDK) m_extraSearcher->GetDBStats(); 
+            void GetDBStat() {
+                m_extraSearcher->GetDBStats();
                 LOG(Helper::LogLevel::LL_Info, "Current Vector Num: %d, Deleted: %d .\n", GetNumSamples(), GetNumDeleted());
             }
 
-            void GetIndexStat(int finishedInsert, bool cost, bool reset) { if (m_options.m_useKV || m_options.m_useSPDK) m_extraSearcher->GetIndexStats(finishedInsert, cost, reset); }
-            
-            void ForceCompaction() { if (m_options.m_useKV) m_extraSearcher->ForceCompaction(); }
+            void GetIndexStat(int finishedInsert, bool cost, bool reset) { m_extraSearcher->GetIndexStats(finishedInsert, cost, reset); }
 
             void StopMerge() { m_options.m_inPlace = true; }
 
@@ -179,8 +177,8 @@ namespace SPTAG
             bool ExitBlockController() { return m_extraSearcher->ExitBlockController(); }
 
             ErrorCode AddIndexSPFresh(const void *p_data, SizeType p_vectorNum, DimensionType p_dimension, SizeType* VID) {
-                if ((!m_options.m_useKV &&!m_options.m_useSPDK) || m_extraSearcher == nullptr) {
-                    LOG(Helper::LogLevel::LL_Error, "Only Support KV Extra Update\n");
+                if (m_extraSearcher == nullptr) {
+                    LOG(Helper::LogLevel::LL_Error, "ExtraSearcher not initialized\n");
                     return ErrorCode::Fail;
                 }
 

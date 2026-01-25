@@ -3,7 +3,7 @@
 
 namespace SPTAG {
     namespace SPANN {
-        // concurrently safe with RocksDBIO
+        // concurrently safe with KeyValueIO implementations
         class PersistentBuffer
         {
         public:

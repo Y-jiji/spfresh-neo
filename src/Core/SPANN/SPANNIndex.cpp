@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "Core/SPANN/Index.h"
+#include "Core/BKT/Index.h"
 #include "Helper/VectorSetReaders/MemoryReader.h"
 #include "Core/SPANN/ExtraStaticSearcher.h"
 #include "Core/SPANN/ExtraDynamicSearcher.h"
@@ -60,9 +61,7 @@ namespace SPTAG
         template <typename T>
         ErrorCode Index<T>::LoadConfig(Helper::IniReader& p_reader)
         {
-            IndexAlgoType algoType = p_reader.GetParameter("Base", "IndexAlgoType", IndexAlgoType::Undefined);
-            VectorValueType valueType = p_reader.GetParameter("Base", "ValueType", VectorValueType::Undefined);
-            if ((m_index = CreateInstance(algoType, valueType)) == nullptr) return ErrorCode::FailedParseValue;
+            m_index = std::shared_ptr<SPTAG::BKT::Index<T>>(new SPTAG::BKT::Index<T>());
 
             std::string sections[] = { "Base", "SelectHead", "BuildHead", "BuildSSDIndex" };
             for (int i = 0; i < 4; i++) {
@@ -98,17 +97,7 @@ namespace SPTAG
             }
             else
             {
-                if (m_options.m_useKV) {
-                    if (m_options.m_inPlace) {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_KVPath.c_str(), m_options.m_dim, INT_MAX, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold));
-                    }
-                    else {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_KVPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit * PageSize / (sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t)), m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold));
-                    }
-                }
-                else {
-                    m_extraSearcher.reset(new ExtraStaticSearcher<T>());
-                }
+                m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
             }
 
             if (!m_extraSearcher->LoadIndex(m_options, m_versionMap)) return ErrorCode::Fail;
@@ -139,19 +128,7 @@ namespace SPTAG
             }
             else
             {
-                if (m_options.m_useKV) {
-                    if (m_options.m_inPlace) {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_KVPath.c_str(), m_options.m_dim, INT_MAX, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold));
-                    }
-                    else {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_KVPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit * PageSize / (sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t)), m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold));
-                    }
-                }
-                else if (m_options.m_useSPDK) {
-                    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, true, m_options.m_spdkBatchSize, m_options.m_bufferLength));
-                } else {
-                    m_extraSearcher.reset(new ExtraStaticSearcher<T>());
-                }
+                m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
             }
 
             if (!m_extraSearcher->LoadIndex(m_options, m_versionMap)) return ErrorCode::Fail;
@@ -163,82 +140,78 @@ namespace SPTAG
 
             omp_set_num_threads(m_options.m_iSSDNumberOfThreads);
 
-            if (m_options.m_useSPDK) {
-                int m_vectorLimit = m_options.m_postingPageLimit * PageSize / (sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t));
-                m_versionMap.Initialize(m_options.m_vectorSize, m_index->m_iDataBlockSize, m_index->m_iDataCapacity);
-                int m_vectorInfoSize = sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t);
-                LOG(Helper::LogLevel::LL_Info, "Copying data from static to SPDK\n");
-                std::shared_ptr<IExtraSearcher> storeExtraSearcher;
-                storeExtraSearcher.reset(new ExtraStaticSearcher<T>());
-                if (!storeExtraSearcher->LoadIndex(m_options, m_versionMap)) {
-                    LOG(Helper::LogLevel::LL_Info, "Initialize Error\n");
-                    exit(1);
-                }
-                int totalPostingNum = m_index->GetNumSamples();
-                m_extraSearcher->InitPostingRecord(m_index);
+            int m_vectorLimit = m_options.m_postingPageLimit * PageSize / (sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t));
+            m_versionMap.Initialize(m_options.m_vectorSize, m_index->m_iDataBlockSize, m_index->m_iDataCapacity);
+            int m_vectorInfoSize = sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t);
+            LOG(Helper::LogLevel::LL_Info, "Copying data from static to SPDK\n");
+            std::shared_ptr<IExtraSearcher> storeExtraSearcher;
+            storeExtraSearcher.reset(new ExtraStaticSearcher<T>());
+            if (!storeExtraSearcher->LoadIndex(m_options, m_versionMap)) {
+                LOG(Helper::LogLevel::LL_Info, "Initialize Error\n");
+                exit(1);
+            }
+            int totalPostingNum = m_index->GetNumSamples();
+            m_extraSearcher->InitPostingRecord(m_index);
 
-                std::vector<std::thread> threads;
-                std::atomic_size_t vectorsSent(0);
+            std::vector<std::thread> threads;
+            std::atomic_size_t vectorsSent(0);
 
-                auto func = [&]()
+            auto func = [&]()
+            {
+                m_extraSearcher->Initialize();
+                size_t index = 0;
+                while (true)
                 {
-                    m_extraSearcher->Initialize();
-                    size_t index = 0;
-                    while (true)
+                    index = vectorsSent.fetch_add(1);
+                    if (index < totalPostingNum)
                     {
-                        index = vectorsSent.fetch_add(1);
-                        if (index < totalPostingNum)
+
+                        if ((index & ((1 << 14) - 1)) == 0)
                         {
-
-                            if ((index & ((1 << 14) - 1)) == 0)
-                            {
-                                LOG(Helper::LogLevel::LL_Info, "Copy to SPDK: Sent %.2lf%%...\n", index * 100.0 / totalPostingNum);
-                            }
-                            std::string tempPosting;
-                            storeExtraSearcher->GetWritePosting(index, tempPosting);
-                            int vectorNum = (int)(tempPosting.size() / (m_vectorInfoSize - sizeof(uint8_t)));
-
-                            if (vectorNum > m_vectorLimit) vectorNum = m_vectorLimit;
-
-                            auto* postingP = reinterpret_cast<char*>(&tempPosting.front());
-                            std::string newPosting(m_vectorInfoSize * vectorNum , '\0');
-                            char* ptr = (char*)(newPosting.c_str());
-                            for (int j = 0; j < vectorNum; ++j, ptr += m_vectorInfoSize) {
-                                char* vectorInfo = postingP + j * (m_vectorInfoSize - sizeof(uint8_t));
-                                int VID = *(reinterpret_cast<int*>(vectorInfo));
-                                uint8_t version = m_versionMap.GetVersion(VID);
-                                memcpy(ptr, &VID, sizeof(int));
-                                memcpy(ptr + sizeof(int), &version, sizeof(uint8_t));
-                                memcpy(ptr + sizeof(int) + sizeof(uint8_t), vectorInfo + sizeof(int), m_vectorInfoSize - sizeof(uint8_t) - sizeof(int));
-                            }
-
-                            if (m_options.m_excludehead) {
-                                auto VIDTrans = static_cast<SizeType>((m_vectorTranslateMap.get())[index]);
-                                uint8_t version = m_versionMap.GetVersion(VIDTrans);
-                                std::string appendPosting(m_vectorInfoSize, '\0');
-                                char* ptr = (char*)(appendPosting.c_str());
-                                memcpy(ptr, &VIDTrans, sizeof(VIDTrans));
-                                memcpy(ptr + sizeof(VIDTrans), &version, sizeof(version));
-                                memcpy(ptr + sizeof(int) + sizeof(uint8_t), m_index->GetSample(index), m_vectorInfoSize - sizeof(int) + sizeof(uint8_t));
-                                newPosting = appendPosting + newPosting;
-                            }
-
-                            m_extraSearcher->GetWritePosting(index, newPosting, true);
+                            LOG(Helper::LogLevel::LL_Info, "Copy to SPDK: Sent %.2lf%%...\n", index * 100.0 / totalPostingNum);
                         }
-                        else
-                        {
-                            m_extraSearcher->ExitBlockController();
-                            return;
+                        std::string tempPosting;
+                        storeExtraSearcher->GetWritePosting(index, tempPosting);
+                        int vectorNum = (int)(tempPosting.size() / (m_vectorInfoSize - sizeof(uint8_t)));
+
+                        if (vectorNum > m_vectorLimit) vectorNum = m_vectorLimit;
+
+                        auto* postingP = reinterpret_cast<char*>(&tempPosting.front());
+                        std::string newPosting(m_vectorInfoSize * vectorNum , '\0');
+                        char* ptr = (char*)(newPosting.c_str());
+                        for (int j = 0; j < vectorNum; ++j, ptr += m_vectorInfoSize) {
+                            char* vectorInfo = postingP + j * (m_vectorInfoSize - sizeof(uint8_t));
+                            int VID = *(reinterpret_cast<int*>(vectorInfo));
+                            uint8_t version = m_versionMap.GetVersion(VID);
+                            memcpy(ptr, &VID, sizeof(int));
+                            memcpy(ptr + sizeof(int), &version, sizeof(uint8_t));
+                            memcpy(ptr + sizeof(int) + sizeof(uint8_t), vectorInfo + sizeof(int), m_vectorInfoSize - sizeof(uint8_t) - sizeof(int));
                         }
+
+                        if (m_options.m_excludehead) {
+                            auto VIDTrans = static_cast<SizeType>((m_vectorTranslateMap.get())[index]);
+                            uint8_t version = m_versionMap.GetVersion(VIDTrans);
+                            std::string appendPosting(m_vectorInfoSize, '\0');
+                            char* ptr = (char*)(appendPosting.c_str());
+                            memcpy(ptr, &VIDTrans, sizeof(VIDTrans));
+                            memcpy(ptr + sizeof(VIDTrans), &version, sizeof(version));
+                            memcpy(ptr + sizeof(int) + sizeof(uint8_t), m_index->GetSample(index), m_vectorInfoSize - sizeof(int) + sizeof(uint8_t));
+                            newPosting = appendPosting + newPosting;
+                        }
+
+                        m_extraSearcher->GetWritePosting(index, newPosting, true);
                     }
-                };
+                    else
+                    {
+                        m_extraSearcher->ExitBlockController();
+                        return;
+                    }
+                }
+            };
             for (int j = 0; j < m_options.m_iSSDNumberOfThreads; j++) { threads.emplace_back(func); }
             for (auto& thread : threads) { thread.join(); }
-            } else {
-                m_versionMap.Load(m_options.m_deleteIDFile, m_index->m_iDataBlockSize, m_index->m_iDataCapacity);
-            }
 
-            if ((m_options.m_useSPDK || m_options.m_useKV) && m_options.m_preReassign) {
+            if (m_options.m_preReassign) {
                 std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(m_options.m_valueType, m_options.m_dim, m_options.m_vectorType, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads));
                 auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
                 if (m_options.m_vectorPath.empty())
@@ -794,8 +767,9 @@ namespace SPTAG
                 auto valueType = m_pQuantizer ? SPTAG::VectorValueType::UInt8 : m_options.m_valueType;
                 auto dims = m_pQuantizer ? m_pQuantizer->GetNumSubvectors() : m_options.m_dim;
 
-                m_index = SPTAG::VectorIndex::CreateInstance(m_options.m_indexAlgoType, valueType);
-                m_index->SetParameter("DistCalcMethod", SPTAG::Helper::Convert::ConvertToString(m_options.m_distCalcMethod));
+                m_index = std::shared_ptr<BKT::Index<T>>(new BKT::Index<T>());
+                std::string distCalcMethod = SPTAG::Helper::Convert::ConvertToString(m_options.m_distCalcMethod);
+                m_index->SetParameter("DistCalcMethod", distCalcMethod.c_str());
                 m_index->SetQuantizer(m_pQuantizer);
                 for (const auto& iter : m_headParameters)
                 {
@@ -845,32 +819,11 @@ namespace SPTAG
                 m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp));
                 m_index->UpdateIndex();
 
-                if (m_options.m_useKV)
-                {
-                    if (m_options.m_inPlace) {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_KVPath.c_str(), m_options.m_dim, INT_MAX, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold));
-                    }
-                    else {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_KVPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit * PageSize / (sizeof(T)*m_options.m_dim + sizeof(int) + sizeof(uint8_t)), m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold));
-                    }
-                } else if (m_options.m_useSPDK)
-                {
-                    if (m_options.m_inPlace) {
-                        LOG(Helper::LogLevel::LL_Info, "Currently unsupport SPDK with inplace!\n");
-                        exit(1);
-                    }
-                    else {
-                        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, true, m_options.m_spdkBatchSize));
-                    }  
+                if (m_options.m_inPlace) {
+                    LOG(Helper::LogLevel::LL_Info, "Currently unsupport SPDK with inplace!\n");
+                    exit(1);
                 }
-                else {
-                    if (m_pQuantizer) {
-                        m_extraSearcher.reset(new ExtraStaticSearcher<std::uint8_t>());
-                    }
-                    else {
-                        m_extraSearcher.reset(new ExtraStaticSearcher<T>());
-                    }
-                }
+                m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize));
 
                 if (m_options.m_buildSsdIndex) {
                     if (!m_options.m_excludehead) {
@@ -906,7 +859,7 @@ namespace SPTAG
                         }
                         IOBINARY(ptr, ReadBinary, sizeof(std::uint64_t) * m_index->GetNumSamples(), (char*)(m_vectorTranslateMap.get()));
                     }
-                    if ((m_options.m_useKV || m_options.m_useSPDK) && m_options.m_preReassign) {
+                    if (m_options.m_preReassign) {
                         m_extraSearcher->RefineIndex(p_reader, m_index);
                     }
                 }
@@ -1038,8 +991,8 @@ namespace SPTAG
                                      std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex,
                                      bool p_normalized)
         {
-            if ((!m_options.m_useKV &&!m_options.m_useSPDK) || m_extraSearcher == nullptr) {
-                LOG(Helper::LogLevel::LL_Error, "Only Support KV Extra Update\n");
+            if (m_extraSearcher == nullptr) {
+                LOG(Helper::LogLevel::LL_Error, "ExtraSearcher not initialized\n");
                 return ErrorCode::Fail;
             }
 

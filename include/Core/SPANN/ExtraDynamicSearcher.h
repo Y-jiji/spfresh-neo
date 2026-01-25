@@ -24,10 +24,6 @@
 #include <random>
 #include <tbb/concurrent_hash_map.h>
 
-#ifdef ROCKSDB
-#include "ExtraRocksDBController.h"
-#endif
-
 // enable rocksdb io_uring
 // extern "C" bool RocksDbIOUringEnable() { return true; }
 
@@ -160,16 +156,9 @@ namespace SPTAG::SPANN {
         tbb::concurrent_hash_map<SizeType, SizeType> m_mergeList;
 
     public:
-        ExtraDynamicSearcher(const char* dbPath, int dim, int postingBlockLimit, bool useDirectIO, float searchLatencyHardLimit, int mergeThreshold, bool useSPDK = false, int batchSize = 64, int bufferLength = 3) {
-            if (useSPDK) {
-                db.reset(new SPDKIO(dbPath, 1024 * 1024, MaxSize, postingBlockLimit + bufferLength, 1024, batchSize));
-                m_postingSizeLimit = postingBlockLimit * PageSize / (sizeof(ValueType) * dim + sizeof(int) + sizeof(uint8_t));
-            } else {
-#ifdef ROCKSDB
-                db.reset(new RocksDBIO(dbPath, useDirectIO));
-                m_postingSizeLimit = postingBlockLimit;
-#endif
-            }
+        ExtraDynamicSearcher(const char* dbPath, int dim, int postingBlockLimit, bool useDirectIO, float searchLatencyHardLimit, int mergeThreshold, int batchSize = 64, int bufferLength = 3) {
+            db.reset(new SPDKIO(dbPath, 1024 * 1024, MaxSize, postingBlockLimit + bufferLength, 1024, batchSize));
+            m_postingSizeLimit = postingBlockLimit * PageSize / (sizeof(ValueType) * dim + sizeof(int) + sizeof(uint8_t));
             m_metaDataSize = sizeof(int) + sizeof(uint8_t);
             m_vectorInfoSize = dim * sizeof(ValueType) + m_metaDataSize;
             m_hardLatencyLimit = std::chrono::microseconds((int)searchLatencyHardLimit * 1000);
@@ -1002,7 +991,6 @@ namespace SPTAG::SPANN {
             }
             double appendIOSeconds = 0;
             {
-                //std::shared_lock<std::shared_timed_mutex> lock(m_rwLocks[headID]); //ROCKSDB
                 std::unique_lock<std::shared_timed_mutex> lock(m_rwLocks[headID]); //SPDK
                 if (!p_index->ContainSample(headID)) {
                     goto checkDeleted;
@@ -1092,13 +1080,6 @@ namespace SPTAG::SPANN {
             m_versionMap = &p_versionMap;
             m_opt = &p_opt;
             LOG(Helper::LogLevel::LL_Info, "DataBlockSize: %d, Capacity: %d\n", m_opt->m_datasetRowsInBlock, m_opt->m_datasetCapacity);
-
-            if (!m_opt->m_useSPDK) {
-                m_versionMap->Load(m_opt->m_deleteIDFile, m_opt->m_datasetRowsInBlock, m_opt->m_datasetCapacity);
-                m_postingSizes.Load(m_opt->m_ssdInfoFile, m_opt->m_datasetRowsInBlock, m_opt->m_datasetCapacity);
-                LOG(Helper::LogLevel::LL_Info, "Current vector num: %d.\n", m_versionMap->GetVectorNum());
-                LOG(Helper::LogLevel::LL_Info, "Current posting num: %d.\n", m_postingSizes.GetPostingNum());
-            }
 
             if (m_opt->m_update) {
                 LOG(Helper::LogLevel::LL_Info, "SPFresh: initialize thread pools, append: %d, reassign %d\n", m_opt->m_appendThreadNum, m_opt->m_reassignThreadNum);
