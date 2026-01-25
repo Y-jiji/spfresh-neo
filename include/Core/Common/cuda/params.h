@@ -28,34 +28,32 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-
 /******************************************************
-* Parameters that have been optimized experimentally 
-******************************************************/
-#define THREADS 64 // Number of threads per block
-#define KNN_THREADS 32 // Number of threads per block
-#define BLOCKS 10240 // Total blocks used
-#define SAMPLES 5000 // number of samples used to determine median for TPT construction
-#define KEYTYPE float // Keys used to divide TPTs at each node
-#define ILP 1 // Increase of ILP using registers in distance calculations
-#define TPT_ITERS 1 // Number of random sets of weights tried for each level
-#define TPT_PART_DIMS D // Number of dimensions used to create hyperplane
-#define REFINE_DEPTH 1 // Depth of refinement step.  No refinement if 0
+ * Parameters that have been optimized experimentally
+ ******************************************************/
+#define THREADS 64       // Number of threads per block
+#define KNN_THREADS 32   // Number of threads per block
+#define BLOCKS 10240     // Total blocks used
+#define SAMPLES 5000     // number of samples used to determine median for TPT construction
+#define KEYTYPE float    // Keys used to divide TPTs at each node
+#define ILP 1            // Increase of ILP using registers in distance calculations
+#define TPT_ITERS 1      // Number of random sets of weights tried for each level
+#define TPT_PART_DIMS D  // Number of dimensions used to create hyperplane
+#define REFINE_DEPTH 1   // Depth of refinement step.  No refinement if 0
 
-#define REORDER 1 // Option to re-order queries for perf improvement (1 = reorder, 0 = no reorder)
+#define REORDER 1  // Option to re-order queries for perf improvement (1 = reorder, 0 = no reorder)
 
-#define CUDA_CHECK(func)                                                       \
-  do {                                                                         \
-    cudaError_t rt = (func);                                                   \
-    if (rt != cudaSuccess) {                                                   \
-      printf(                                                                  \
-          "GPU API call failure \"" #func "\" with CUDA error %d\n", (int)rt); \
-      throw;                                                                   \
-    }                                                                          \
-  } while (0)
+#define CUDA_CHECK(func)                                                             \
+    do {                                                                             \
+        cudaError_t rt = (func);                                                     \
+        if (rt != cudaSuccess) {                                                     \
+            printf(                                                                  \
+                "GPU API call failure \"" #func "\" with CUDA error %d\n", (int)rt); \
+            throw;                                                                   \
+        }                                                                            \
+    } while (0)
 
-#define GET_CHRONO_TIME(start,end)                                             \
-  ((double)std::chrono::duration_cast<std::chrono::seconds>(end-start).count()) + (((double)std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count())/1000)
+#define GET_CHRONO_TIME(start, end) \
+    ((double)std::chrono::duration_cast<std::chrono::seconds>(end - start).count()) + (((double)std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()) / 1000)
 
 #endif
-

@@ -6,12 +6,10 @@
 
 #include "CommonDataStructure.h"
 
-namespace SPTAG
-{
+namespace SPTAG {
 
-class VectorSet
-{
-public:
+class VectorSet {
+   public:
     VectorSet();
 
     virtual ~VectorSet();
@@ -37,14 +35,9 @@ public:
     virtual void Normalize(int p_threads) = 0;
 };
 
-
-class BasicVectorSet : public VectorSet
-{
-public:
-    BasicVectorSet(const ByteArray& p_bytesArray,
-                   VectorValueType p_valueType,
-                   DimensionType p_dimension,
-                   SizeType p_vectorCount);
+class BasicVectorSet : public VectorSet {
+   public:
+    BasicVectorSet(const ByteArray& p_bytesArray, VectorValueType p_valueType, DimensionType p_dimension, SizeType p_vectorCount);
 
     virtual ~BasicVectorSet();
 
@@ -68,7 +61,7 @@ public:
 
     virtual void Normalize(int p_threads);
 
-private:
+   private:
     ByteArray m_data;
 
     VectorValueType m_valueType;
@@ -80,6 +73,6 @@ private:
     size_t m_perVectorDataSize;
 };
 
-} // namespace SPTAG
+}  // namespace SPTAG
 
-#endif // _SPTAG_VECTORSET_H_
+#endif  // _SPTAG_VECTORSET_H_

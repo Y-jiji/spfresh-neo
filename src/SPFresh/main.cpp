@@ -12,22 +12,18 @@
 #include "Core/Common/TruthSet.h"
 
 #include "SPFresh/SPFresh.h"
- 
 
-
-// switch between exe and static library by _$(OutputType) 
+// switch between exe and static library by _$(OutputType)
 #ifdef _exe
 
 int main(int argc, char* argv[]) {
-	if (argc < 2)
-	{
-		SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error,
-			"spfresh storePath\n");
-		exit(-1);
-	}
+    if (argc < 2) {
+        SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error, "spfresh storePath\n");
+        exit(-1);
+    }
 
-	auto ret = SPTAG::SSDServing::SPFresh::UpdateTest(argv[1]);
-	return ret;
+    auto ret = SPTAG::SSDServing::SPFresh::UpdateTest(argv[1]);
+    return ret;
 }
 
 #endif

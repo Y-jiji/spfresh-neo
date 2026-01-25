@@ -24,9 +24,9 @@
 #include <sys/types.h>
 
 #if defined(__INTEL_COMPILER)
-#include <malloc.h>
+    #include <malloc.h>
 #else
-#include <mm_malloc.h>
+    #include <mm_malloc.h>
 #endif
 
 #define FolderSep '/'
@@ -50,28 +50,27 @@ inline T max(T a, T b) {
 }
 
 #ifndef _rotl
-#define _rotl(x, n) (((x) << (n)) | ((x) >> (32-(n))))
+    #define _rotl(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
 #endif
 
 #define mkdir(a) mkdir(a, ACCESSPERMS)
-#define InterlockedCompareExchange(a,b,c) __sync_val_compare_and_swap(a, c, b)
-#define InterlockedExchange8(a,b) __sync_lock_test_and_set(a, b)
+#define InterlockedCompareExchange(a, b, c) __sync_val_compare_and_swap(a, c, b)
+#define InterlockedExchange8(a, b) __sync_lock_test_and_set(a, b)
 #define Sleep(a) usleep(a * 1000)
 #define strtok_s(a, b, c) strtok_r(a, b, c)
 #define ALIGN_ROUND(size) ((size) + 31) / 32 * 32
 
-namespace SPTAG
-{
+namespace SPTAG {
 #if (__cplusplus < 201703L)
-#define ALIGN_ALLOC(size) _mm_malloc(size, 32)
-#define ALIGN_FREE(ptr) _mm_free(ptr)
-#define PAGE_ALLOC(size) _mm_malloc(size, 512)
-#define PAGE_FREE(ptr) _mm_free(ptr)
+    #define ALIGN_ALLOC(size) _mm_malloc(size, 32)
+    #define ALIGN_FREE(ptr) _mm_free(ptr)
+    #define PAGE_ALLOC(size) _mm_malloc(size, 512)
+    #define PAGE_FREE(ptr) _mm_free(ptr)
 #else
-#define ALIGN_ALLOC(size) ::operator new(size, (std::align_val_t)32)
-#define ALIGN_FREE(ptr) ::operator delete(ptr, (std::align_val_t)32)
-#define PAGE_ALLOC(size) ::operator new(size, (std::align_val_t)512)
-#define PAGE_FREE(ptr) ::operator delete(ptr, (std::align_val_t)512)
+    #define ALIGN_ALLOC(size) ::operator new(size, (std::align_val_t)32)
+    #define ALIGN_FREE(ptr) ::operator delete(ptr, (std::align_val_t)32)
+    #define PAGE_ALLOC(size) ::operator new(size, (std::align_val_t)512)
+    #define PAGE_FREE(ptr) ::operator delete(ptr, (std::align_val_t)512)
 #endif
 
 #define ALIGN_ROUND(size) ((size) + 31) / 32 * 32
@@ -88,26 +87,33 @@ const int PageSizeEx = 12;
 
 extern std::mt19937 rg;
 
-extern std::shared_ptr<Helper::DiskIO>(*f_createIO)();
+extern std::shared_ptr<Helper::DiskIO> (*f_createIO)();
 
-#define IOBINARY(ptr, func, bytes, ...) if (ptr->func(bytes, __VA_ARGS__) != bytes) return ErrorCode::DiskIOFail
-#define IOSTRING(ptr, func, ...) if (ptr->func(__VA_ARGS__) == 0) return ErrorCode::DiskIOFail
+#define IOBINARY(ptr, func, bytes, ...)         \
+    if (ptr->func(bytes, __VA_ARGS__) != bytes) \
+    return ErrorCode::DiskIOFail
+#define IOSTRING(ptr, func, ...)     \
+    if (ptr->func(__VA_ARGS__) == 0) \
+    return ErrorCode::DiskIOFail
 
 extern std::shared_ptr<Helper::Logger> g_pLogger;
 
 #define LOG(l, ...) g_pLogger->Logging("SPTAG", l, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
-class MyException : public std::exception 
-{
-private:
+class MyException : public std::exception {
+   private:
     std::string Exp;
-public:
-    MyException(std::string e) { Exp = e; }
-    const char* what() const noexcept { return Exp.c_str(); }
+
+   public:
+    MyException(std::string e) {
+        Exp = e;
+    }
+    const char* what() const noexcept {
+        return Exp.c_str();
+    }
 };
 
-enum class ErrorCode : std::uint16_t
-{
+enum class ErrorCode : std::uint16_t {
 #define DefineErrorCode(Name, Value) Name = Value,
 #include "DefinitionList.h"
 #undef DefineErrorCode
@@ -116,9 +122,7 @@ enum class ErrorCode : std::uint16_t
 };
 static_assert(static_cast<std::uint16_t>(ErrorCode::Undefined) != 0, "Empty ErrorCode!");
 
-
-enum class DistCalcMethod : std::uint8_t
-{
+enum class DistCalcMethod : std::uint8_t {
 #define DefineDistCalcMethod(Name) Name,
 #include "DefinitionList.h"
 #undef DefineDistCalcMethod
@@ -127,9 +131,7 @@ enum class DistCalcMethod : std::uint8_t
 };
 static_assert(static_cast<std::uint8_t>(DistCalcMethod::Undefined) != 0, "Empty DistCalcMethod!");
 
-
-enum class VectorValueType : std::uint8_t
-{
+enum class VectorValueType : std::uint8_t {
 #define DefineVectorValueType(Name, Type) Name,
 #include "DefinitionList.h"
 #undef DefineVectorValueType
@@ -138,9 +140,7 @@ enum class VectorValueType : std::uint8_t
 };
 static_assert(static_cast<std::uint8_t>(VectorValueType::Undefined) != 0, "Empty VectorValueType!");
 
-
-enum class IndexAlgoType : std::uint8_t
-{
+enum class IndexAlgoType : std::uint8_t {
 #define DefineIndexAlgo(Name) Name,
 #include "DefinitionList.h"
 #undef DefineIndexAlgo
@@ -149,8 +149,7 @@ enum class IndexAlgoType : std::uint8_t
 };
 static_assert(static_cast<std::uint8_t>(IndexAlgoType::Undefined) != 0, "Empty IndexAlgoType!");
 
-enum class VectorFileType : std::uint8_t
-{
+enum class VectorFileType : std::uint8_t {
 #define DefineVectorFileType(Name) Name,
 #include "DefinitionList.h"
 #undef DefineVectorFileType
@@ -159,8 +158,7 @@ enum class VectorFileType : std::uint8_t
 };
 static_assert(static_cast<std::uint8_t>(VectorFileType::Undefined) != 0, "Empty VectorFileType!");
 
-enum class TruthFileType : std::uint8_t
-{
+enum class TruthFileType : std::uint8_t {
 #define DefineTruthFileType(Name) Name,
 #include "DefinitionList.h"
 #undef DefineTruthFileType
@@ -169,44 +167,37 @@ enum class TruthFileType : std::uint8_t
 };
 static_assert(static_cast<std::uint8_t>(TruthFileType::Undefined) != 0, "Empty TruthFileType!");
 
-template<typename T>
-constexpr VectorValueType GetEnumValueType()
-{
+template <typename T>
+constexpr VectorValueType GetEnumValueType() {
     return VectorValueType::Undefined;
 }
 
-
-#define DefineVectorValueType(Name, Type) \
-template<> \
-constexpr VectorValueType GetEnumValueType<Type>() \
-{ \
-    return VectorValueType::Name; \
-}
+#define DefineVectorValueType(Name, Type)                \
+    template <>                                          \
+    constexpr VectorValueType GetEnumValueType<Type>() { \
+        return VectorValueType::Name;                    \
+    }
 
 #include "DefinitionList.h"
 #undef DefineVectorValueType
 
-
-inline std::size_t GetValueTypeSize(VectorValueType p_valueType)
-{
-    switch (p_valueType)
-    {
+inline std::size_t GetValueTypeSize(VectorValueType p_valueType) {
+    switch (p_valueType) {
 #define DefineVectorValueType(Name, Type) \
-    case VectorValueType::Name: \
-        return sizeof(Type); \
+    case VectorValueType::Name:           \
+        return sizeof(Type);
 
 #include "DefinitionList.h"
 #undef DefineVectorValueType
 
-    default:
-        break;
+        default:
+            break;
     }
 
     return 0;
 }
 
-enum class QuantizerType : std::uint8_t
-{
+enum class QuantizerType : std::uint8_t {
 #define DefineQuantizerType(Name, Type) Name,
 #include "DefinitionList.h"
 #undef DefineQuantizerType
@@ -215,6 +206,6 @@ enum class QuantizerType : std::uint8_t
 };
 static_assert(static_cast<std::uint8_t>(QuantizerType::Undefined) != 0, "Empty QuantizerType!");
 
-} // namespace SPTAG
+}  // namespace SPTAG
 
-#endif // _SPTAG_CORE_COMMONDEFS_H_
+#endif  // _SPTAG_CORE_COMMONDEFS_H_

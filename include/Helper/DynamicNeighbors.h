@@ -2,47 +2,40 @@
 
 #include <memory>
 
-namespace SPTAG {
-namespace Helper {
-    class DynamicNeighbors
-    {
-    public:
-        DynamicNeighbors(const int* p_data, const int p_length);
+namespace SPTAG::Helper {
+class DynamicNeighbors {
+   public:
+    DynamicNeighbors(const int* p_data, const int p_length);
 
-        ~DynamicNeighbors();
+    ~DynamicNeighbors();
 
-        int operator[](const int p_id) const;
+    int operator[](const int p_id) const;
 
-        int Size() const;
+    int Size() const;
 
-    private:
-        const int* const c_data;
+   private:
+    const int* const c_data;
 
-        const int c_length;
-    };
+    const int c_length;
+};
 
+class DynamicNeighborsSet {
+   public:
+    DynamicNeighborsSet(const char* p_filePath);
 
-    class DynamicNeighborsSet
-    {
-    public:
-        DynamicNeighborsSet(const char* p_filePath);
+    ~DynamicNeighborsSet();
 
-        ~DynamicNeighborsSet();
+    DynamicNeighbors operator[](const int p_id) const;
 
-        DynamicNeighbors operator[](const int p_id) const;
+    int VectorCount() const {
+        return m_vectorCount;
+    }
 
-        int VectorCount() const
-        {
-            return m_vectorCount;
-        }
+   private:
+    std::unique_ptr<int[]> m_data;
 
-    private:
-        std::unique_ptr<int[]> m_data;
+    std::unique_ptr<int[]> m_neighborOffset;
 
-        std::unique_ptr<int[]> m_neighborOffset;
-
-        int m_vectorCount;
-    };
-}
-}
-
+    int m_vectorCount;
+};
+}  // namespace SPTAG::Helper

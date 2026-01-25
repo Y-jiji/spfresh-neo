@@ -6,14 +6,10 @@
 
 #include "Helper/VectorSetReader.h"
 
-namespace SPTAG
-{
-namespace Helper
-{
+namespace SPTAG::Helper {
 
-class DefaultVectorReader : public VectorSetReader
-{
-public:
+class DefaultVectorReader : public VectorSetReader {
+   public:
     DefaultVectorReader(std::shared_ptr<ReaderOptions> p_options);
 
     virtual ~DefaultVectorReader();
@@ -24,7 +20,7 @@ public:
 
     virtual std::shared_ptr<MetadataSet> GetMetadataSet() const;
 
-private:
+   private:
     std::string m_vectorOutput;
 
     std::string m_metadataConentOutput;
@@ -32,9 +28,6 @@ private:
     std::string m_metadataIndexOutput;
 };
 
+}  // namespace SPTAG::Helper
 
-
-} // namespace Helper
-} // namespace SPTAG
-
-#endif // _SPTAG_HELPER_VECTORSETREADERS_DEFAULTREADER_H_
+#endif  // _SPTAG_HELPER_VECTORSETREADERS_DEFAULTREADER_H_

@@ -10,92 +10,84 @@
 #include <fstream>
 #include <mutex>
 
-#pragma warning(disable:4996)
+#pragma warning(disable : 4996)
 
-namespace SPTAG
-{
-    namespace Helper
-    {
-        enum class LogLevel
-        {
-            LL_Debug = 0,
-            LL_Info,
-            LL_Status,
-            LL_Warning,
-            LL_Error,
-            LL_Assert,
-            LL_Count,
-            LL_Empty
-        };
+namespace SPTAG::Helper {
+enum class LogLevel {
+    LL_Debug = 0,
+    LL_Info,
+    LL_Status,
+    LL_Warning,
+    LL_Error,
+    LL_Assert,
+    LL_Count,
+    LL_Empty
+};
 
-        class Logger 
-        {
-        public:
-            virtual void Logging(const char* title, LogLevel level, const char* file, int line, const char* func, const char* format, ...) = 0;
-        };
+class Logger {
+   public:
+    virtual void Logging(const char* title, LogLevel level, const char* file, int line, const char* func, const char* format, ...) = 0;
+};
 
+class SimpleLogger : public Logger {
+   public:
+    SimpleLogger(LogLevel level) : m_level(level) {}
 
-        class SimpleLogger : public Logger {
-        public:
-            SimpleLogger(LogLevel level) : m_level(level) {}
+    virtual void Logging(const char* title, LogLevel level, const char* file, int line, const char* func, const char* format, ...) {
+        if (level < m_level)
+            return;
 
-            virtual void Logging(const char* title, LogLevel level, const char* file, int line, const char* func, const char* format, ...)
-            {
-                if (level < m_level) return;
+        if (level != LogLevel::LL_Empty)
+            printf("[%d] ", (int)level);
 
-                if (level != LogLevel::LL_Empty) printf("[%d] ", (int)level);
+        va_list args;
+        va_start(args, format);
 
-                va_list args;
-                va_start(args, format);
-                
-                vprintf(format, args);
-                fflush(stdout);
+        vprintf(format, args);
+        fflush(stdout);
 
-                va_end(args);
-            }
-        private:
-            LogLevel m_level;
-        };
+        va_end(args);
+    }
 
-        class FileLogger : public Logger {
-        public:
-            FileLogger(LogLevel level, const char* file) : m_level(level)
-            {
-                m_handle.reset(new std::fstream(file, std::ios::out));
-            }
+   private:
+    LogLevel m_level;
+};
 
-            ~FileLogger()
-            {
-                if (m_handle != nullptr) m_handle->close();
-            }
+class FileLogger : public Logger {
+   public:
+    FileLogger(LogLevel level, const char* file) : m_level(level) {
+        m_handle.reset(new std::fstream(file, std::ios::out));
+    }
 
-            virtual void Logging(const char* title, LogLevel level, const char* file, int line, const char* func, const char* format, ...)
-            {
-                if (level < m_level || m_handle == nullptr || !m_handle->is_open()) return;
+    ~FileLogger() {
+        if (m_handle != nullptr)
+            m_handle->close();
+    }
 
-                va_list args;
-                va_start(args, format);
+    virtual void Logging(const char* title, LogLevel level, const char* file, int line, const char* func, const char* format, ...) {
+        if (level < m_level || m_handle == nullptr || !m_handle->is_open())
+            return;
 
-                char buffer[1024];
-                int ret = vsprintf(buffer, format, args);
-                if (ret > 0)
-                {
-                    m_handle->write(buffer, strlen(buffer));
-                }
-                else
-                {
-                    std::string msg("Buffer size is not enough!\n");
-                    m_handle->write(msg.c_str(), msg.size());
-                }
+        va_list args;
+        va_start(args, format);
 
-                m_handle->flush();
-                va_end(args);
-            }
-        private:
-            LogLevel m_level;
-            std::unique_ptr<std::fstream> m_handle;
-        };
-    } // namespace Helper
-} // namespace SPTAG
+        char buffer[1024];
+        int ret = vsprintf(buffer, format, args);
+        if (ret > 0) {
+            m_handle->write(buffer, strlen(buffer));
+        } else {
+            std::string msg("Buffer size is not enough!\n");
+            m_handle->write(msg.c_str(), msg.size());
+        }
 
-#endif // _SPTAG_HELPER_LOGGING_H_
+        m_handle->flush();
+        va_end(args);
+    }
+
+   private:
+    LogLevel m_level;
+    std::unique_ptr<std::fstream> m_handle;
+};
+}  // namespace SPTAG::Helper
+
+#endif  // _SPTAG_HELPER_LOGGING_H_

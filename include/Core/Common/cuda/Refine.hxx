@@ -10,11 +10,10 @@
 #include <cub/cub.cuh>
 #include <chrono>
 
+#define MAX_CHECK_COUNT 32  // Max number of neighbors checked during each step of refinement.
 
-#define MAX_CHECK_COUNT 32 // Max number of neighbors checked during each step of refinement.
-
-#define LISTCAP 2048 // Maximum size of buffer for each threadblock during refinemnt
-#define LISTSIZE 1024 // Maximum size of nearest neighbors stored during refinement
+#define LISTCAP 2048   // Maximum size of buffer for each threadblock during refinemnt
+#define LISTSIZE 1024  // Maximum size of nearest neighbors stored during refinement
 
 #define REFINE_THREADS 64
 #define REFINE_BLOCKS 1024
@@ -147,7 +146,7 @@ __device__ void removeDuplicatesAndCompact( ListElt<SUMTYPE>* listMem, int* list
     sortKeys[0] = 0;
   }
   else {
-    sortKeys[0] = (sortMem[0].id != listMem[threadIdx.x*(LISTCAP/NUM_THREADS) - 1].id); 
+    sortKeys[0] = (sortMem[0].id != listMem[threadIdx.x*(LISTCAP/NUM_THREADS) - 1].id);
   }
   for(int i=1; i<LISTCAP/NUM_THREADS; i++) {
     sortKeys[i] = (sortMem[i].id != sortMem[i-1].id);
@@ -232,19 +231,19 @@ __device__ void shrinkListRNG_sequential(Point<T,SUMTYPE,MAX_DIM>* d_points, int
       for(int k=0; k<count && good; k++) {
         if(nodes[k] == -1) break;
 
-	if(metric == 0) {
+    if(metric == 0) {
           if(d_points[nodes[k]].l2(&d_points[item.id]) <= item.dist) {
-	    good = false;
+        good = false;
             break;
-	  }
+      }
         }
-	if(metric == 1) {
+    if(metric == 1) {
           if(d_points[nodes[k]].cosine(&d_points[item.id]) <= item.dist) {
-	    good = false;
+        good = false;
             break;
-	  }
+      }
         }
-      } 
+      }
       if(good) nodes[count++] = item.id;
     }
     for(int j=count; j<KVAL;j++) nodes[j] = -1;

@@ -6,35 +6,25 @@
 #include <cctype>
 #include <functional>
 
-void
-SPTAG::Helper::StrUtils::ToLowerInPlace(std::string& p_str)
-{
-    for (char& ch : p_str)
-    {
-        if (std::isupper(ch))
-        {
+void SPTAG::Helper::StrUtils::ToLowerInPlace(std::string& p_str) {
+    for (char& ch : p_str) {
+        if (std::isupper(ch)) {
             ch = ch | 0x20;
         }
     }
 }
 
-
 std::vector<std::string>
-SPTAG::Helper::StrUtils::SplitString(const std::string& p_str, const std::string& p_separator)
-{
+SPTAG::Helper::StrUtils::SplitString(const std::string& p_str, const std::string& p_separator) {
     std::vector<std::string> ret;
 
     std::size_t begin = p_str.find_first_not_of(p_separator);
-    while (std::string::npos != begin)
-    {
+    while (std::string::npos != begin) {
         std::size_t end = p_str.find_first_of(p_separator, begin);
-        if (std::string::npos == end)
-        {
+        if (std::string::npos == end) {
             ret.emplace_back(p_str.substr(begin, p_str.size() - begin));
             break;
-        }
-        else
-        {
+        } else {
             ret.emplace_back(p_str.substr(begin, end - begin));
         }
 
@@ -44,26 +34,18 @@ SPTAG::Helper::StrUtils::SplitString(const std::string& p_str, const std::string
     return ret;
 }
 
-
 std::pair<const char*, const char*>
-SPTAG::Helper::StrUtils::FindTrimmedSegment(const char* p_begin,
-                             const char* p_end,
-                             const std::function<bool(char)>& p_isSkippedChar)
-{
-    while (p_begin < p_end)
-    {
-        if (!p_isSkippedChar(*p_begin))
-        {
+SPTAG::Helper::StrUtils::FindTrimmedSegment(const char* p_begin, const char* p_end, const std::function<bool(char)>& p_isSkippedChar) {
+    while (p_begin < p_end) {
+        if (!p_isSkippedChar(*p_begin)) {
             break;
         }
 
         ++p_begin;
     }
 
-    while (p_end > p_begin)
-    {
-        if (!p_isSkippedChar(*(p_end - 1)))
-        {
+    while (p_end > p_begin) {
+        if (!p_isSkippedChar(*(p_end - 1))) {
             break;
         }
 
@@ -73,24 +55,17 @@ SPTAG::Helper::StrUtils::FindTrimmedSegment(const char* p_begin,
     return std::make_pair(p_begin, p_end);
 }
 
-
-bool
-SPTAG::Helper::StrUtils::StartsWith(const char* p_str, const char* p_prefix)
-{
-    if (nullptr == p_prefix)
-    {
+bool SPTAG::Helper::StrUtils::StartsWith(const char* p_str, const char* p_prefix) {
+    if (nullptr == p_prefix) {
         return true;
     }
 
-    if (nullptr == p_str)
-    {
+    if (nullptr == p_str) {
         return false;
     }
 
-    while ('\0' != (*p_prefix) && '\0' != (*p_str))
-    {
-        if (*p_prefix != *p_str)
-        {
+    while ('\0' != (*p_prefix) && '\0' != (*p_str)) {
+        if (*p_prefix != *p_str) {
             return false;
         }
         ++p_prefix;
@@ -100,34 +75,25 @@ SPTAG::Helper::StrUtils::StartsWith(const char* p_str, const char* p_prefix)
     return '\0' == *p_prefix;
 }
 
-
-bool
-SPTAG::Helper::StrUtils::StrEqualIgnoreCase(const char* p_left, const char* p_right)
-{
-    if (p_left == p_right)
-    {
+bool SPTAG::Helper::StrUtils::StrEqualIgnoreCase(const char* p_left, const char* p_right) {
+    if (p_left == p_right) {
         return true;
     }
 
-    if (p_left == nullptr || p_right == nullptr)
-    {
+    if (p_left == nullptr || p_right == nullptr) {
         return false;
     }
 
-    auto tryConv = [](char p_ch) -> char
-    {
-        if ('a' <= p_ch && p_ch <= 'z')
-        {
+    auto tryConv = [](char p_ch) -> char {
+        if ('a' <= p_ch && p_ch <= 'z') {
             return p_ch - 32;
         }
 
         return p_ch;
     };
 
-    while (*p_left != '\0' && *p_right != '\0')
-    {
-        if (tryConv(*p_left) != tryConv(*p_right))
-        {
+    while (*p_left != '\0' && *p_right != '\0') {
+        if (tryConv(*p_left) != tryConv(*p_right)) {
             return false;
         }
 
@@ -138,12 +104,11 @@ SPTAG::Helper::StrUtils::StrEqualIgnoreCase(const char* p_left, const char* p_ri
     return *p_left == *p_right;
 }
 
-
 std::string
-SPTAG::Helper::StrUtils::ReplaceAll(const std::string& orig, const std::string& from, const std::string& to)
-{
+SPTAG::Helper::StrUtils::ReplaceAll(const std::string& orig, const std::string& from, const std::string& to) {
     std::string ret = orig;
-    if (from.empty()) return ret;
+    if (from.empty())
+        return ret;
 
     size_t pos = 0;
     while ((pos = ret.find(from, pos)) != std::string::npos) {

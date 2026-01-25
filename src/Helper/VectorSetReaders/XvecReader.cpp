@@ -6,36 +6,28 @@
 
 #include <time.h>
 
-namespace SPTAG {
-namespace Helper {
+namespace SPTAG::Helper {
 
 using SPTAG::g_pLogger;
 
 XvecVectorReader::XvecVectorReader(std::shared_ptr<ReaderOptions> p_options)
-    : VectorSetReader(p_options)
-{
+    : VectorSetReader(p_options) {
     std::string tempFolder("tempfolder");
-    if (!direxists(tempFolder.c_str()))
-    {
+    if (!direxists(tempFolder.c_str())) {
         mkdir(tempFolder.c_str());
     }
     std::srand(clock());
     m_vectorOutput = tempFolder + FolderSep + "vectorset.bin." + std::to_string(std::rand());
 }
 
-
-XvecVectorReader::~XvecVectorReader()
-{
-    if (fileexists(m_vectorOutput.c_str()))
-    {
+XvecVectorReader::~XvecVectorReader() {
+    if (fileexists(m_vectorOutput.c_str())) {
         remove(m_vectorOutput.c_str());
     }
 }
 
-
 ErrorCode
-XvecVectorReader::LoadFile(const std::string& p_filePaths)
-{
+XvecVectorReader::LoadFile(const std::string& p_filePaths) {
     const auto& files = StrUtils::SplitString(p_filePaths, ",");
     auto fp = SPTAG::f_createIO();
     if (fp == nullptr || !fp->Initialize(m_vectorOutput.c_str(), std::ios::binary | std::ios::out)) {
@@ -45,20 +37,19 @@ XvecVectorReader::LoadFile(const std::string& p_filePaths)
     SizeType vectorCount = 0;
     IOBINARY(fp, WriteBinary, sizeof(vectorCount), (char*)&vectorCount);
     IOBINARY(fp, WriteBinary, sizeof(m_options->m_dimension), (char*)&(m_options->m_dimension));
-    
+
     size_t vectorDataSize = SPTAG::GetValueTypeSize(m_options->m_inputValueType) * m_options->m_dimension;
     std::unique_ptr<char[]> buffer(new char[vectorDataSize]);
-    for (std::string file : files)
-    {
+    for (std::string file : files) {
         auto ptr = SPTAG::f_createIO();
         if (ptr == nullptr || !ptr->Initialize(file.c_str(), std::ios::binary | std::ios::in)) {
             LOG(LogLevel::LL_Error, "Failed to read file: %s \n", file.c_str());
             return ErrorCode::FailedOpenFile;
         }
-        while (true)
-        {
+        while (true) {
             DimensionType dim;
-            if (ptr->ReadBinary(sizeof(DimensionType), (char*)&dim) == 0) break;
+            if (ptr->ReadBinary(sizeof(DimensionType), (char*)&dim) == 0)
+                break;
 
             if (dim != m_options->m_dimension) {
                 LOG(LogLevel::LL_Error, "Xvec file %s has No.%d vector whose dims are not as many as expected. Expected: %d, Fact: %d\n", file.c_str(), vectorCount, m_options->m_dimension, dim);
@@ -73,10 +64,8 @@ XvecVectorReader::LoadFile(const std::string& p_filePaths)
     return ErrorCode::Success;
 }
 
-
 std::shared_ptr<SPTAG::VectorSet>
-XvecVectorReader::GetVectorSet(SPTAG::SizeType start, SPTAG::SizeType end) const
-{
+XvecVectorReader::GetVectorSet(SPTAG::SizeType start, SPTAG::SizeType end) const {
     auto ptr = SPTAG::f_createIO();
     if (ptr == nullptr || !ptr->Initialize(m_vectorOutput.c_str(), std::ios::binary | std::ios::in)) {
         LOG(LogLevel::LL_Error, "Failed to read file %s.\n", m_vectorOutput.c_str());
@@ -94,8 +83,10 @@ XvecVectorReader::GetVectorSet(SPTAG::SizeType start, SPTAG::SizeType end) const
         throw std::runtime_error("Failed read file");
     }
 
-    if (start > row) start = row;
-    if (end < 0 || end > row) end = row;
+    if (start > row)
+        start = row;
+    if (end < 0 || end > row)
+        end = row;
     std::uint64_t totalRecordVectorBytes = ((std::uint64_t)SPTAG::GetValueTypeSize(m_options->m_inputValueType)) * (end - start) * col;
     SPTAG::ByteArray vectorSet;
     if (totalRecordVectorBytes > 0) {
@@ -107,18 +98,12 @@ XvecVectorReader::GetVectorSet(SPTAG::SizeType start, SPTAG::SizeType end) const
             throw std::runtime_error("Failed read file");
         }
     }
-    return std::shared_ptr<SPTAG::VectorSet>(new SPTAG::BasicVectorSet(vectorSet,
-        m_options->m_inputValueType,
-        col,
-        end - start));
+    return std::shared_ptr<SPTAG::VectorSet>(new SPTAG::BasicVectorSet(vectorSet, m_options->m_inputValueType, col, end - start));
 }
 
-
 std::shared_ptr<SPTAG::MetadataSet>
-XvecVectorReader::GetMetadataSet() const
-{
+XvecVectorReader::GetMetadataSet() const {
     return nullptr;
 }
 
-} // namespace Helper
-} // namespace SPTAG
+}  // namespace SPTAG::Helper

@@ -12,38 +12,35 @@
 
 void cpuid(int info[4], int InfoType);
 
-namespace SPTAG {
-    namespace COMMON {
+namespace SPTAG::COMMON {
 
-        class InstructionSet
-        {
-            // forward declarations
-            class InstructionSet_Internal;
+class InstructionSet {
+    // forward declarations
+    class InstructionSet_Internal;
 
-        public:
-            // getters
-            static bool AVX(void);
-            static bool SSE(void);
-            static bool SSE2(void);
-            static bool AVX2(void);
-            static bool AVX512(void);
-            static void PrintInstructionSet(void);
+   public:
+    // getters
+    static bool AVX(void);
+    static bool SSE(void);
+    static bool SSE2(void);
+    static bool AVX2(void);
+    static bool AVX512(void);
+    static void PrintInstructionSet(void);
 
-        private:
-            static const InstructionSet_Internal CPU_Rep;
+   private:
+    static const InstructionSet_Internal CPU_Rep;
 
-            class InstructionSet_Internal
-            {
-            public:
-                InstructionSet_Internal();
-                bool HW_SSE;
-                bool HW_SSE2;
-                bool HW_AVX;
-                bool HW_AVX2;
-                bool HW_AVX512;
-            };
-        };
-    }
-}
+    class InstructionSet_Internal {
+       public:
+        InstructionSet_Internal();
+        bool HW_SSE;
+        bool HW_SSE2;
+        bool HW_AVX;
+        bool HW_AVX2;
+        bool HW_AVX512;
+    };
+};
+
+}  // namespace SPTAG::COMMON
 
 #endif

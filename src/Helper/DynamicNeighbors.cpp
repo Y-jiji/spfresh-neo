@@ -3,37 +3,25 @@
 
 SPTAG::Helper::DynamicNeighbors::DynamicNeighbors(const int* p_data, const int p_length)
     : c_data(p_data),
-    c_length(p_length)
-{
+      c_length(p_length) {
 }
 
-
-SPTAG::Helper::DynamicNeighbors::~DynamicNeighbors()
-{
+SPTAG::Helper::DynamicNeighbors::~DynamicNeighbors() {
 }
 
-
-int
-SPTAG::Helper::DynamicNeighbors::operator[](const int p_id) const
-{
-    if (p_id < c_length && p_id >= 0)
-    {
+int SPTAG::Helper::DynamicNeighbors::operator[](const int p_id) const {
+    if (p_id < c_length && p_id >= 0) {
         return c_data[p_id];
     }
 
     return -1;
 }
 
-
-int
-SPTAG::Helper::DynamicNeighbors::Size() const
-{
+int SPTAG::Helper::DynamicNeighbors::Size() const {
     return c_length;
 }
 
-
-SPTAG::Helper::DynamicNeighborsSet::DynamicNeighborsSet(const char* p_filePath)
-{
+SPTAG::Helper::DynamicNeighborsSet::DynamicNeighborsSet(const char* p_filePath) {
     auto fp = f_createIO();
     if (fp == nullptr || !fp->Initialize(p_filePath, std::ios::binary | std::ios::in)) {
         LOG(Helper::LogLevel::LL_Error, "Failed open graph file: %s\n", p_filePath);
@@ -66,19 +54,13 @@ SPTAG::Helper::DynamicNeighborsSet::DynamicNeighborsSet(const char* p_filePath)
     }
 }
 
-
-SPTAG::Helper::DynamicNeighborsSet::~DynamicNeighborsSet()
-{
+SPTAG::Helper::DynamicNeighborsSet::~DynamicNeighborsSet() {
 }
 
-
-SPTAG::Helper::DynamicNeighbors SPTAG::Helper::DynamicNeighborsSet::operator[](const int p_id) const
-{
-    if (p_id >= m_vectorCount)
-    {
+SPTAG::Helper::DynamicNeighbors SPTAG::Helper::DynamicNeighborsSet::operator[](const int p_id) const {
+    if (p_id >= m_vectorCount) {
         return SPTAG::Helper::DynamicNeighbors(nullptr, 0);
     }
 
-    return SPTAG::Helper::DynamicNeighbors(m_data.get() + static_cast<uint64_t>(m_neighborOffset[p_id]),
-        m_neighborOffset[p_id + 1] - m_neighborOffset[p_id]);
+    return SPTAG::Helper::DynamicNeighbors(m_data.get() + static_cast<uint64_t>(m_neighborOffset[p_id]), m_neighborOffset[p_id + 1] - m_neighborOffset[p_id]);
 }

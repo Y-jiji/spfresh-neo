@@ -3,20 +3,19 @@
 
 #include "Core/SPANN/ExtraSPDKController.h"
 
-namespace SPTAG::SPANN
-{
+namespace SPTAG::SPANN {
 
 thread_local struct SPDKIO::BlockController::IoContext SPDKIO::BlockController::m_currIoContext;
 int SPDKIO::BlockController::m_ssdInflight = 0;
 int SPDKIO::BlockController::m_ioCompleteCount = 0;
 std::unique_ptr<char[]> SPDKIO::BlockController::m_memBuffer;
 
-void SPDKIO::BlockController::SpdkBdevEventCallback(enum spdk_bdev_event_type type, struct spdk_bdev *bdev, void *event_ctx) {
+void SPDKIO::BlockController::SpdkBdevEventCallback(enum spdk_bdev_event_type type, struct spdk_bdev* bdev, void* event_ctx) {
     fprintf(stderr, "SpdkBdevEventCallback: supported bdev event type %d\n", type);
 }
 
-void SPDKIO::BlockController::SpdkBdevIoCallback(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg) {
-    SubIoRequest* currSubIo = (SubIoRequest *)cb_arg;
+void SPDKIO::BlockController::SpdkBdevIoCallback(struct spdk_bdev_io* bdev_io, bool success, void* cb_arg) {
+    SubIoRequest* currSubIo = (SubIoRequest*)cb_arg;
     if (success) {
         m_ioCompleteCount++;
         spdk_bdev_free_io(bdev_io);
@@ -29,16 +28,16 @@ void SPDKIO::BlockController::SpdkBdevIoCallback(struct spdk_bdev_io *bdev_io, b
     }
 }
 
-void SPDKIO::BlockController::SpdkStop(void *arg) {
-    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController *)arg;
+void SPDKIO::BlockController::SpdkStop(void* arg) {
+    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController*)arg;
     // Close I/O channel and bdev
     spdk_put_io_channel(ctrl->m_ssdSpdkBdevIoChannel);
     spdk_bdev_close(ctrl->m_ssdSpdkBdevDesc);
     fprintf(stdout, "SPDKIO::BlockController::SpdkStop: finalized\n");
 }
 
-void SPDKIO::BlockController::SpdkIoLoop(void *arg) {
-    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController *)arg;
+void SPDKIO::BlockController::SpdkIoLoop(void* arg) {
+    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController*)arg;
     int rc = 0;
     SubIoRequest* currSubIo = nullptr;
     while (!ctrl->m_ssdSpdkThreadExiting) {
@@ -53,8 +52,7 @@ void SPDKIO::BlockController::SpdkIoLoop(void *arg) {
                     currSubIo->dma_buff, currSubIo->offset, PageSize, SpdkBdevIoCallback, currSubIo);
             }
             if (rc && rc != -ENOMEM) {
-                fprintf(stderr, "SPDKIO::BlockController::SpdkStart %s failed: %d, shutting down, offset: %ld\n",
-                    currSubIo->is_read ? "spdk_bdev_read" : "spdk_bdev_write", rc, currSubIo->offset);
+                fprintf(stderr, "SPDKIO::BlockController::SpdkStart %s failed: %d, shutting down, offset: %ld\n", currSubIo->is_read ? "spdk_bdev_read" : "spdk_bdev_write", rc, currSubIo->offset);
                 spdk_app_stop(-1);
                 break;
             } else {
@@ -69,8 +67,8 @@ void SPDKIO::BlockController::SpdkIoLoop(void *arg) {
     }
 }
 
-void SPDKIO::BlockController::SpdkStart(void *arg) {
-    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController *)arg;
+void SPDKIO::BlockController::SpdkStart(void* arg) {
+    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController*)arg;
 
     fprintf(stdout, "SPDKIO::BlockController::SpdkStart: using bdev %s\n", ctrl->m_ssdSpdkBdevName);
 
@@ -104,8 +102,8 @@ void SPDKIO::BlockController::SpdkStart(void *arg) {
     SpdkIoLoop(ctrl);
 }
 
-void* SPDKIO::BlockController::InitializeSpdk(void *arg) {
-    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController *)arg;
+void* SPDKIO::BlockController::InitializeSpdk(void* arg) {
+    SPDKIO::BlockController* ctrl = (SPDKIO::BlockController*)arg;
 
     struct spdk_app_opts opts;
     spdk_app_opts_init(&opts, sizeof(opts));
@@ -115,7 +113,8 @@ void* SPDKIO::BlockController::InitializeSpdk(void *arg) {
     const char* spdkBdevName = getenv(kSpdkBdevNameEnv);
     ctrl->m_ssdSpdkBdevName = spdkBdevName ? spdkBdevName : "";
     const char* spdkIoDepth = getenv(kSpdkIoDepth);
-    if (spdkIoDepth) ctrl->m_ssdSpdkIoDepth = atoi(spdkIoDepth);
+    if (spdkIoDepth)
+        ctrl->m_ssdSpdkIoDepth = atoi(spdkIoDepth);
 
     int rc;
     rc = spdk_app_start(&opts, &SPTAG::SPANN::SPDKIO::BlockController::SpdkStart, arg);
@@ -152,7 +151,8 @@ bool SPDKIO::BlockController::Initialize(int batchSize) {
                 m_blockAddresses.push(i);
             }
             pthread_create(&m_ssdSpdkTid, NULL, &InitializeSpdk, this);
-            while (!m_ssdSpdkThreadReady && !m_ssdSpdkThreadStartFailed);
+            while (!m_ssdSpdkThreadReady && !m_ssdSpdkThreadStartFailed)
+                ;
             if (m_ssdSpdkThreadStartFailed) {
                 fprintf(stderr, "SPDKIO::BlockController::Initialize failed\n");
                 return false;
@@ -163,7 +163,7 @@ bool SPDKIO::BlockController::Initialize(int batchSize) {
         m_currIoContext.in_flight = 0;
         uint32_t buf_align;
         buf_align = spdk_bdev_get_buf_align(m_ssdSpdkBdev);
-        for (auto &sr : m_currIoContext.sub_io_requests) {
+        for (auto& sr : m_currIoContext.sub_io_requests) {
             sr.completed_sub_io_requests = &(m_currIoContext.completed_sub_io_requests);
             sr.app_buff = nullptr;
             sr.dma_buff = spdk_dma_zmalloc(PageSize, buf_align, NULL);
@@ -182,7 +182,8 @@ bool SPDKIO::BlockController::GetBlocks(AddressType* p_data, int p_size) {
     AddressType currBlockAddress = 0;
     if (m_useMemImpl || m_useSsdImpl) {
         for (int i = 0; i < p_size; i++) {
-            while (!m_blockAddresses.try_pop(currBlockAddress));
+            while (!m_blockAddresses.try_pop(currBlockAddress))
+                ;
             p_data[i] = currBlockAddress;
         }
         return true;
@@ -208,7 +209,7 @@ bool SPDKIO::BlockController::ReleaseBlocks(AddressType* p_data, int p_size) {
 // read a posting list. p_data[0] is the total data size,
 // p_data[1], p_data[2], ..., p_data[((p_data[0] + PageSize - 1) >> PageSizeEx)] are the addresses of the blocks
 // concat all the block contents together into p_value string.
-bool SPDKIO::BlockController::ReadBlocks(AddressType* p_data, std::string* p_value, const std::chrono::microseconds &timeout) {
+bool SPDKIO::BlockController::ReadBlocks(AddressType* p_data, std::string* p_value, const std::chrono::microseconds& timeout) {
     if (m_useMemImpl) {
         p_value->resize(p_data[0]);
         AddressType currOffset = 0;
@@ -271,7 +272,7 @@ bool SPDKIO::BlockController::ReadBlocks(AddressType* p_data, std::string* p_val
 }
 
 // parallel read a list of posting lists.
-bool SPDKIO::BlockController::ReadBlocks(std::vector<AddressType*>& p_data, std::vector<std::string>* p_values, const std::chrono::microseconds &timeout) {
+bool SPDKIO::BlockController::ReadBlocks(std::vector<AddressType*>& p_data, std::vector<std::string>* p_values, const std::chrono::microseconds& timeout) {
     if (m_useMemImpl) {
         p_values->resize(p_data.size());
         for (size_t i = 0; i < p_data.size(); i++) {
@@ -388,8 +389,8 @@ bool SPDKIO::BlockController::WriteBlocks(AddressType* p_data, int p_size, const
             if (currBlockIdx < p_size && m_currIoContext.free_sub_io_requests.size()) {
                 currSubIo = m_currIoContext.free_sub_io_requests.back();
                 m_currIoContext.free_sub_io_requests.pop_back();
-                currSubIo->app_buff = const_cast<char *>(p_value.data()) + currBlockIdx * PageSize;
-                currSubIo->real_size = (PageSize * (currBlockIdx + 1)) > totalSize ? (totalSize - currBlockIdx * PageSize): PageSize;
+                currSubIo->app_buff = const_cast<char*>(p_value.data()) + currBlockIdx * PageSize;
+                currSubIo->real_size = (PageSize * (currBlockIdx + 1)) > totalSize ? (totalSize - currBlockIdx * PageSize) : PageSize;
                 currSubIo->is_read = false;
                 currSubIo->offset = p_data[currBlockIdx] * PageSize;
                 memcpy(currSubIo->dma_buff, currSubIo->app_buff, currSubIo->real_size);
@@ -460,7 +461,7 @@ bool SPDKIO::BlockController::ShutDown() {
             }
         }
         // Free memory buffers
-        for (auto &sr : m_currIoContext.sub_io_requests) {
+        for (auto& sr : m_currIoContext.sub_io_requests) {
             sr.completed_sub_io_requests = nullptr;
             sr.app_buff = nullptr;
             spdk_free(sr.dma_buff);
@@ -474,4 +475,4 @@ bool SPDKIO::BlockController::ShutDown() {
     }
 }
 
-}
+}  // namespace SPTAG::SPANN

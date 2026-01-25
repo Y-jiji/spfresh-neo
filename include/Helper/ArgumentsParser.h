@@ -7,19 +7,15 @@
 #include "Helper/StringConvert.h"
 
 #include <cstdint>
-#include <cstddef> 
+#include <cstddef>
 #include <memory>
 #include <vector>
 #include <string>
 
-namespace SPTAG
-{
-namespace Helper
-{
+namespace SPTAG::Helper {
 
-class ArgumentsParser
-{
-public:
+class ArgumentsParser {
+   public:
     ArgumentsParser();
 
     virtual ~ArgumentsParser();
@@ -28,33 +24,24 @@ public:
 
     virtual void PrintHelp();
 
-protected:
-    class IArgument
-    {
-    public:
+   protected:
+    class IArgument {
+       public:
         IArgument();
 
         virtual ~IArgument();
 
-        virtual bool ParseValue(int& p_restArgc, char** (&p_args)) = 0;
+        virtual bool ParseValue(int& p_restArgc, char**(&p_args)) = 0;
 
         virtual void PrintDescription() = 0;
 
         virtual bool IsRequiredButNotSet() const = 0;
     };
 
-
-    template<typename DataType>
-    class ArgumentT : public IArgument
-    {
-    public:
-        ArgumentT(DataType& p_target,
-                  const std::string& p_representStringShort,
-                  const std::string& p_representString,
-                  const std::string& p_description,
-                  bool p_followedValue,
-                  const DataType& p_switchAsValue,
-                  bool p_isRequired)
+    template <typename DataType>
+    class ArgumentT : public IArgument {
+       public:
+        ArgumentT(DataType& p_target, const std::string& p_representStringShort, const std::string& p_representString, const std::string& p_description, bool p_followedValue, const DataType& p_switchAsValue, bool p_isRequired)
             : m_value(p_target),
               m_representStringShort(p_representStringShort),
               m_representString(p_representString),
@@ -62,30 +49,22 @@ protected:
               m_followedValue(p_followedValue),
               c_switchAsValue(p_switchAsValue),
               m_isRequired(p_isRequired),
-              m_isSet(false)
-        {
+              m_isSet(false) {
         }
 
-        virtual ~ArgumentT()
-        {
+        virtual ~ArgumentT() {
         }
 
-
-        virtual bool ParseValue(int& p_restArgc, char** (&p_args))
-        {
-            if (0 == p_restArgc)
-            {
+        virtual bool ParseValue(int& p_restArgc, char**(&p_args)) {
+            if (0 == p_restArgc) {
                 return true;
             }
 
-            if (0 != strcmp(*p_args, m_representString.c_str())
-                && 0 != strcmp(*p_args, m_representStringShort.c_str()))
-            {
+            if (0 != strcmp(*p_args, m_representString.c_str()) && 0 != strcmp(*p_args, m_representStringShort.c_str())) {
                 return true;
             }
 
-            if (!m_followedValue)
-            {
+            if (!m_followedValue) {
                 m_value = c_switchAsValue;
                 --p_restArgc;
                 ++p_args;
@@ -93,14 +72,12 @@ protected:
                 return true;
             }
 
-            if (p_restArgc < 2)
-            {
+            if (p_restArgc < 2) {
                 return false;
             }
 
             DataType tmp;
-            if (!Helper::Convert::ConvertStringTo(p_args[1], tmp))
-            {
+            if (!Helper::Convert::ConvertStringTo(p_args[1], tmp)) {
                 return false;
             }
 
@@ -112,20 +89,15 @@ protected:
             return true;
         }
 
-
-        virtual void PrintDescription()
-        {
+        virtual void PrintDescription() {
             std::size_t padding = 40;
-            if (!m_representStringShort.empty())
-            {
+            if (!m_representStringShort.empty()) {
                 LOG(Helper::LogLevel::LL_Empty, "%s", m_representStringShort.c_str());
                 padding -= m_representStringShort.size();
             }
 
-            if (!m_representString.empty())
-            {
-                if (!m_representStringShort.empty())
-                {
+            if (!m_representString.empty()) {
+                if (!m_representStringShort.empty()) {
                     LOG(Helper::LogLevel::LL_Empty, ", ");
                     padding -= 2;
                 }
@@ -134,28 +106,24 @@ protected:
                 padding -= m_representString.size();
             }
 
-            if (m_followedValue)
-            {
+            if (m_followedValue) {
                 LOG(Helper::LogLevel::LL_Empty, " <value>");
                 padding -= 8;
             }
 
-            while (padding-- > 0)
-            {
+            while (padding-- > 0) {
                 LOG(Helper::LogLevel::LL_Empty, " ");
             }
 
             LOG(Helper::LogLevel::LL_Empty, "%s", m_description.c_str());
         }
 
-
-        virtual bool IsRequiredButNotSet() const
-        {
+        virtual bool IsRequiredButNotSet() const {
             return m_isRequired && !m_isSet;
         }
 
-    private:
-        DataType & m_value;
+       private:
+        DataType& m_value;
 
         std::string m_representStringShort;
 
@@ -172,82 +140,30 @@ protected:
         bool m_isSet;
     };
 
-
-    template<typename DataType>
-    void AddRequiredOption(DataType& p_target,
-                           const std::string& p_representStringShort,
-                           const std::string& p_representString,
-                           const std::string& p_description)
-    {
-        m_arguments.emplace_back(std::shared_ptr<IArgument>(
-            new ArgumentT<DataType>(p_target,
-                                    p_representStringShort,
-                                    p_representString,
-                                    p_description,
-                                    true,
-                                    DataType(),
-                                    true)));
+    template <typename DataType>
+    void AddRequiredOption(DataType& p_target, const std::string& p_representStringShort, const std::string& p_representString, const std::string& p_description) {
+        m_arguments.emplace_back(std::shared_ptr<IArgument>(new ArgumentT<DataType>(p_target, p_representStringShort, p_representString, p_description, true, DataType(), true)));
     }
 
-
-    template<typename DataType>
-    void AddOptionalOption(DataType& p_target,
-                           const std::string& p_representStringShort,
-                           const std::string& p_representString,
-                           const std::string& p_description)
-    {
-        m_arguments.emplace_back(std::shared_ptr<IArgument>(
-            new ArgumentT<DataType>(p_target,
-                                    p_representStringShort,
-                                    p_representString,
-                                    p_description,
-                                    true,
-                                    DataType(),
-                                    false)));
+    template <typename DataType>
+    void AddOptionalOption(DataType& p_target, const std::string& p_representStringShort, const std::string& p_representString, const std::string& p_description) {
+        m_arguments.emplace_back(std::shared_ptr<IArgument>(new ArgumentT<DataType>(p_target, p_representStringShort, p_representString, p_description, true, DataType(), false)));
     }
 
-
-    template<typename DataType>
-    void AddRequiredSwitch(DataType& p_target,
-                           const std::string& p_representStringShort,
-                           const std::string& p_representString,
-                           const std::string& p_description,
-                           const DataType& p_switchAsValue)
-    {
-        m_arguments.emplace_back(std::shared_ptr<IArgument>(
-            new ArgumentT<DataType>(p_target,
-                                    p_representStringShort,
-                                    p_representString,
-                                    p_description,
-                                    false,
-                                    p_switchAsValue,
-                                    true)));
+    template <typename DataType>
+    void AddRequiredSwitch(DataType& p_target, const std::string& p_representStringShort, const std::string& p_representString, const std::string& p_description, const DataType& p_switchAsValue) {
+        m_arguments.emplace_back(std::shared_ptr<IArgument>(new ArgumentT<DataType>(p_target, p_representStringShort, p_representString, p_description, false, p_switchAsValue, true)));
     }
 
-
-    template<typename DataType>
-    void AddOptionalSwitch(DataType& p_target,
-                           const std::string& p_representStringShort,
-                           const std::string& p_representString,
-                           const std::string& p_description,
-                           const DataType& p_switchAsValue)
-    {
-        m_arguments.emplace_back(std::shared_ptr<IArgument>(
-            new ArgumentT<DataType>(p_target,
-                                    p_representStringShort,
-                                    p_representString,
-                                    p_description,
-                                    false,
-                                    p_switchAsValue,
-                                    false)));
+    template <typename DataType>
+    void AddOptionalSwitch(DataType& p_target, const std::string& p_representStringShort, const std::string& p_representString, const std::string& p_description, const DataType& p_switchAsValue) {
+        m_arguments.emplace_back(std::shared_ptr<IArgument>(new ArgumentT<DataType>(p_target, p_representStringShort, p_representString, p_description, false, p_switchAsValue, false)));
     }
 
-private:
+   private:
     std::vector<std::shared_ptr<IArgument>> m_arguments;
 };
 
+}  // namespace SPTAG::Helper
 
-} // namespace Helper
-} // namespace SPTAG
-
-#endif // _SPTAG_HELPER_ARGUMENTSPARSER_H_
+#endif  // _SPTAG_HELPER_ARGUMENTSPARSER_H_

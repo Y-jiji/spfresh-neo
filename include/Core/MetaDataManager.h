@@ -11,12 +11,10 @@
 #include <memory>
 #include <functional>
 
-namespace SPTAG
-{
+namespace SPTAG {
 
-class MetaDataManager
-{
-public:
+class MetaDataManager {
+   public:
     MetaDataManager();
     ~MetaDataManager();
 
@@ -36,10 +34,10 @@ public:
     SizeType GetMetaMapping(std::string& meta) const;
     void UpdateMetaMapping(const std::string& meta, SizeType i);
 
-    template<typename ContainSampleFunc>
+    template <typename ContainSampleFunc>
     void BuildMetaMapping(MetadataSet* p_metadata, SizeType p_vectorCount, ContainSampleFunc p_containSample, SizeType p_dataBlockSize, bool p_checkDeleted = true);
 
-private:
+   private:
     std::string m_sIndexName;
     std::string m_sMetadataFile;
     std::string m_sMetadataIndexFile;
@@ -47,6 +45,6 @@ private:
     std::shared_ptr<void> m_pMetaToVec;
 };
 
-} // namespace SPTAG
+}  // namespace SPTAG
 
-#endif // _SPTAG_METADATAMANAGER_H_
+#endif  // _SPTAG_METADATAMANAGER_H_

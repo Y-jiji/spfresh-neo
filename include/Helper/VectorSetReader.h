@@ -11,34 +11,29 @@
 
 #include <memory>
 
-namespace SPTAG
-{
-namespace Helper
-{
+namespace SPTAG::Helper {
 
-class ReaderOptions : public ArgumentsParser
-{
-public:
+class ReaderOptions : public ArgumentsParser {
+   public:
     ReaderOptions(VectorValueType p_valueType, DimensionType p_dimension, VectorFileType p_fileType, std::string p_vectorDelimiter = "|", std::uint32_t p_threadNum = 32, bool p_normalized = false);
 
     ~ReaderOptions();
 
     SPTAG::VectorValueType m_inputValueType;
-    
-    DimensionType m_dimension;   
-  
+
+    DimensionType m_dimension;
+
     SPTAG::VectorFileType m_inputFileType;
 
-    std::string m_vectorDelimiter;    
-    
+    std::string m_vectorDelimiter;
+
     std::uint32_t m_threadNum;
 
     bool m_normalized;
 };
 
-class VectorSetReader
-{
-public:
+class VectorSetReader {
+   public:
     VectorSetReader(std::shared_ptr<ReaderOptions> p_options);
 
     virtual ~VectorSetReader();
@@ -49,17 +44,16 @@ public:
 
     virtual std::shared_ptr<MetadataSet> GetMetadataSet() const = 0;
 
-    virtual bool IsNormalized() const { return m_options->m_normalized; }
+    virtual bool IsNormalized() const {
+        return m_options->m_normalized;
+    }
 
     static std::shared_ptr<VectorSetReader> CreateInstance(std::shared_ptr<ReaderOptions> p_options);
 
-protected:
+   protected:
     std::shared_ptr<ReaderOptions> m_options;
 };
 
+}  // namespace SPTAG::Helper
 
-
-} // namespace Helper
-} // namespace SPTAG
-
-#endif // _SPTAG_HELPER_VECTORSETREADER_H_
+#endif  // _SPTAG_HELPER_VECTORSETREADER_H_

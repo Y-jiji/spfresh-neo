@@ -13,36 +13,36 @@
 #include "Core/Common/IQuantizer.h"
 #include "MetaDataManager.h"
 
-namespace SPTAG
-{
+namespace SPTAG {
 
-class IAbortOperation
-{
-public:
+class IAbortOperation {
+   public:
     virtual bool ShouldAbort() = 0;
 };
 
-class VectorIndex
-{
-public:
+class VectorIndex {
+   public:
     VectorIndex();
 
     virtual ~VectorIndex();
 
     virtual ErrorCode BuildIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, bool p_normalized = false, bool p_shareOwnership = false) = 0;
-    
-    virtual ErrorCode AddIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false) = 0;
-    virtual ErrorCode AddIndexId(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, int& beginHead, int& endHead) { return ErrorCode::Undefined; }
-    virtual ErrorCode AddIndexIdx(SizeType begin, SizeType end) { return ErrorCode::Undefined; }
 
+    virtual ErrorCode AddIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false) = 0;
+    virtual ErrorCode AddIndexId(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, int& beginHead, int& endHead) {
+        return ErrorCode::Undefined;
+    }
+    virtual ErrorCode AddIndexIdx(SizeType begin, SizeType end) {
+        return ErrorCode::Undefined;
+    }
 
     virtual ErrorCode DeleteIndex(const void* p_vectors, SizeType p_vectorNum) = 0;
 
     virtual ErrorCode SearchIndex(QueryResult& p_results, bool p_searchDeleted = false) const = 0;
-    
-    virtual ErrorCode RefineSearchIndex(QueryResult &p_query, bool p_searchDeleted = false) const = 0;
 
-    virtual ErrorCode SearchTree(QueryResult &p_query) const = 0;
+    virtual ErrorCode RefineSearchIndex(QueryResult& p_query, bool p_searchDeleted = false) const = 0;
+
+    virtual ErrorCode SearchTree(QueryResult& p_query) const = 0;
 
     virtual ErrorCode RefineIndex(std::shared_ptr<VectorIndex>& p_newIndex) = 0;
 
@@ -51,7 +51,7 @@ public:
     virtual const void* GetSample(const SizeType idx) const = 0;
     virtual bool ContainSample(const SizeType idx) const = 0;
     virtual bool NeedRefine() const = 0;
-   
+
     virtual DimensionType GetFeatureDim() const = 0;
     virtual SizeType GetNumSamples() const = 0;
     virtual SizeType GetNumDeleted() const = 0;
@@ -64,8 +64,12 @@ public:
     virtual ErrorCode SetParameter(const char* p_param, const char* p_value, const char* p_section = nullptr) = 0;
     virtual ErrorCode UpdateIndex() = 0;
 
-    virtual bool IsReady() const { return m_bReady; }
-    virtual void SetReady(bool p_ready) { m_bReady = p_ready; }
+    virtual bool IsReady() const {
+        return m_bReady;
+    }
+    virtual void SetReady(bool p_ready) {
+        m_bReady = p_ready;
+    }
 
     virtual std::shared_ptr<std::vector<std::uint64_t>> CalculateBufferSize() const;
 
@@ -76,15 +80,17 @@ public:
     virtual ErrorCode SaveIndexToFile(const std::string& p_file, IAbortOperation* p_abort = nullptr);
 
     virtual ErrorCode BuildIndex(std::shared_ptr<VectorSet> p_vectorSet, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false, bool p_shareOwnership = false);
-    
-    virtual ErrorCode BuildIndex(bool p_normalized = false) { return ErrorCode::Undefined; }
+
+    virtual ErrorCode BuildIndex(bool p_normalized = false) {
+        return ErrorCode::Undefined;
+    }
 
     virtual ErrorCode AddIndex(std::shared_ptr<VectorSet> p_vectorSet, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false);
 
     virtual ErrorCode DeleteIndex(ByteArray p_meta);
 
     virtual ErrorCode MergeIndex(VectorIndex* p_addindex, int p_threadnum, IAbortOperation* p_abort);
-    
+
     virtual const void* GetSample(ByteArray p_meta, bool& deleteFlag);
 
     virtual ErrorCode SearchIndex(const void* p_vector, int p_vectorCount, int p_neighborCount, bool p_withMeta, BasicResult* p_results) const;
@@ -100,18 +106,23 @@ public:
     virtual MetadataSet* GetMetadata() const;
     virtual void SetMetadata(MetadataSet* p_new);
 
-    virtual std::string GetIndexName() const
-    {
+    virtual std::string GetIndexName() const {
         std::string name = m_metadataManager.GetIndexName();
-        if (name == "") return Helper::Convert::ConvertToString(GetIndexAlgoType());
+        if (name == "")
+            return Helper::Convert::ConvertToString(GetIndexAlgoType());
         return name;
     }
-    virtual void SetIndexName(std::string p_name) { m_metadataManager.SetIndexName(p_name); }
+    virtual void SetIndexName(std::string p_name) {
+        m_metadataManager.SetIndexName(p_name);
+    }
 
-    virtual void SetQuantizerFileName(std::string p_QuantizerFileName) { m_metadataManager.SetQuantizerFile(p_QuantizerFileName); }
+    virtual void SetQuantizerFileName(std::string p_QuantizerFileName) {
+        m_metadataManager.SetQuantizerFile(p_QuantizerFileName);
+    }
 
     virtual void SetQuantizerADC(bool enableADC) {
-        if (m_pQuantizer) m_pQuantizer->SetEnableADC(enableADC);
+        if (m_pQuantizer)
+            m_pQuantizer->SetEnableADC(enableADC);
     }
 
     virtual void SetQuantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer) = 0;
@@ -146,7 +157,9 @@ public:
 
     virtual ErrorCode RefineIndex(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams, IAbortOperation* p_abort) = 0;
 
-    inline bool HasMetaMapping() const { return m_metadataManager.HasMetaMapping(); }
+    inline bool HasMetaMapping() const {
+        return m_metadataManager.HasMetaMapping();
+    }
 
     inline SizeType GetMetaMapping(std::string& meta) const;
 
@@ -154,24 +167,23 @@ public:
 
     void BuildMetaMapping(bool p_checkDeleted = true);
 
-private:
+   private:
     ErrorCode LoadIndexConfig(Helper::IniReader& p_reader);
 
     ErrorCode SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut);
 
-protected:
+   protected:
     bool m_bReady = false;
     std::shared_ptr<MetadataSet> m_pMetadata;
     MetaDataManager m_metadataManager;
 
-public:
+   public:
     int m_iDataBlockSize = 1024 * 1024;
     int m_iDataCapacity = MaxSize;
     int m_iMetaRecordSize = 10;
     std::shared_ptr<SPTAG::COMMON::IQuantizer> m_pQuantizer = nullptr;
 };
 
+}  // namespace SPTAG
 
-} // namespace SPTAG
-
-#endif // _SPTAG_VECTORINDEX_H_
+#endif  // _SPTAG_VECTORINDEX_H_

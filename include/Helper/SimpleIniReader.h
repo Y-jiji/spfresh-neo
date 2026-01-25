@@ -12,16 +12,11 @@
 #include <memory>
 #include <string>
 
-
-namespace SPTAG
-{
-namespace Helper
-{
+namespace SPTAG::Helper {
 
 // Simple INI Reader with basic functions. Case insensitive.
-class IniReader
-{
-public:
+class IniReader {
+   public:
     typedef std::map<std::string, std::string> ParameterValueMap;
 
     IniReader();
@@ -43,56 +38,46 @@ public:
 
     void SetParameter(const std::string& p_section, const std::string& p_param, const std::string& p_val);
 
-private:
+   private:
     bool GetRawValue(const std::string& p_section, const std::string& p_param, std::string& p_value) const;
 
     template <typename DataType>
     static inline DataType ConvertStringTo(std::string&& p_str, const DataType& p_defaultVal);
 
-private:
+   private:
     const static ParameterValueMap c_emptyParameters;
 
     std::map<std::string, std::shared_ptr<ParameterValueMap>> m_parameters;
 };
 
-
 template <typename DataType>
 DataType
-IniReader::GetParameter(const std::string& p_section, const std::string& p_param, const DataType& p_defaultVal) const
-{
+IniReader::GetParameter(const std::string& p_section, const std::string& p_param, const DataType& p_defaultVal) const {
     std::string value;
-    if (!GetRawValue(p_section, p_param, value))
-    {
+    if (!GetRawValue(p_section, p_param, value)) {
         return p_defaultVal;
     }
 
     return ConvertStringTo<DataType>(std::move(value), p_defaultVal);
 }
 
-
 template <typename DataType>
 inline DataType
-IniReader::ConvertStringTo(std::string&& p_str, const DataType& p_defaultVal)
-{
+IniReader::ConvertStringTo(std::string&& p_str, const DataType& p_defaultVal) {
     DataType value;
-    if (Convert::ConvertStringTo<DataType>(p_str.c_str(), value))
-    {
+    if (Convert::ConvertStringTo<DataType>(p_str.c_str(), value)) {
         return value;
     }
 
     return p_defaultVal;
 }
 
-
 template <>
 inline std::string
-IniReader::ConvertStringTo<std::string>(std::string&& p_str, const std::string& p_defaultVal)
-{
+IniReader::ConvertStringTo<std::string>(std::string&& p_str, const std::string& p_defaultVal) {
     return std::move(p_str);
 }
 
+}  // namespace SPTAG::Helper
 
-} // namespace Helper
-} // namespace SPTAG
-
-#endif // _SPTAG_HELPER_INIREADER_H_
+#endif  // _SPTAG_HELPER_INIREADER_H_

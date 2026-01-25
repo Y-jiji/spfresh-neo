@@ -5,15 +5,10 @@
 #define _SPTAG_HELPER_BASE64ENCODE_H_
 
 #include <cstdint>
-#include <cstddef> 
+#include <cstddef>
 #include <ostream>
 
-namespace SPTAG
-{
-namespace Helper
-{
-namespace Base64
-{
+namespace SPTAG::Helper::Base64 {
 
 bool Encode(const std::uint8_t* p_in, std::size_t p_inLen, char* p_out, std::size_t& p_outLen);
 
@@ -25,9 +20,6 @@ std::size_t CapacityForEncode(std::size_t p_inLen);
 
 std::size_t CapacityForDecode(std::size_t p_inLen);
 
+}  // namespace SPTAG::Helper::Base64
 
-} // namespace Base64
-} // namespace Helper
-} // namespace SPTAG
-
-#endif // _SPTAG_HELPER_BASE64ENCODE_H_
+#endif  // _SPTAG_HELPER_BASE64ENCODE_H_

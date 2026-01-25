@@ -7,17 +7,13 @@
 
 #include <omp.h>
 
-
-
 SPTAG::Helper::TxtVectorReader::TxtVectorReader(std::shared_ptr<ReaderOptions> p_options)
     : SPTAG::Helper::VectorSetReader(p_options),
-    m_subTaskBlocksize(0)
-{
+      m_subTaskBlocksize(0) {
     omp_set_num_threads(m_options->m_threadNum);
 
     std::string tempFolder("tempfolder");
-    if (!direxists(tempFolder.c_str()))
-    {
+    if (!direxists(tempFolder.c_str())) {
         mkdir(tempFolder.c_str());
     }
 
@@ -29,63 +25,46 @@ SPTAG::Helper::TxtVectorReader::TxtVectorReader(std::shared_ptr<ReaderOptions> p
     m_metadataIndexOutput = tempFolder + "metadataindex.bin." + randstr;
 }
 
-
-SPTAG::Helper::TxtVectorReader::~TxtVectorReader()
-{
-    if (fileexists(m_vectorOutput.c_str()))
-    {
+SPTAG::Helper::TxtVectorReader::~TxtVectorReader() {
+    if (fileexists(m_vectorOutput.c_str())) {
         remove(m_vectorOutput.c_str());
     }
 
-    if (fileexists(m_metadataIndexOutput.c_str()))
-    {
+    if (fileexists(m_metadataIndexOutput.c_str())) {
         remove(m_metadataIndexOutput.c_str());
     }
 
-    if (fileexists(m_metadataConentOutput.c_str()))
-    {
+    if (fileexists(m_metadataConentOutput.c_str())) {
         remove(m_metadataConentOutput.c_str());
     }
 }
 
-
 SPTAG::ErrorCode
-SPTAG::Helper::TxtVectorReader::LoadFile(const std::string& p_filePaths)
-{
+SPTAG::Helper::TxtVectorReader::LoadFile(const std::string& p_filePaths) {
     const auto& files = GetFileSizes(p_filePaths);
     std::vector<std::function<SPTAG::ErrorCode()>> subWorks;
     subWorks.reserve(files.size() * m_options->m_threadNum);
 
     m_subTaskCount = 0;
-    for (const auto& fileInfo : files)
-    {
-        if (fileInfo.second == (std::numeric_limits<std::size_t>::max)())
-        {
+    for (const auto& fileInfo : files) {
+        if (fileInfo.second == (std::numeric_limits<std::size_t>::max)()) {
             LOG(Helper::LogLevel::LL_Error, "File %s not exists or can't access.\n", fileInfo.first.c_str());
             return SPTAG::ErrorCode::FailedOpenFile;
         }
 
         std::uint32_t fileTaskCount = 0;
         std::size_t blockSize = m_subTaskBlocksize;
-        if (0 == blockSize)
-        {
+        if (0 == blockSize) {
             fileTaskCount = m_options->m_threadNum;
-            if(fileTaskCount == 0) fileTaskCount = 1;
+            if (fileTaskCount == 0)
+                fileTaskCount = 1;
             blockSize = (fileInfo.second + fileTaskCount - 1) / fileTaskCount;
-        }
-        else
-        {
+        } else {
             fileTaskCount = static_cast<std::uint32_t>((fileInfo.second + blockSize - 1) / blockSize);
         }
 
-        for (std::uint32_t i = 0; i < fileTaskCount; ++i)
-        {
-            subWorks.emplace_back(std::bind(&TxtVectorReader::LoadFileInternal,
-                                            this,
-                                            fileInfo.first,
-                                            m_subTaskCount++,
-                                            i,
-                                            blockSize));
+        for (std::uint32_t i = 0; i < fileTaskCount; ++i) {
+            subWorks.emplace_back(std::bind(&TxtVectorReader::LoadFileInternal, this, fileInfo.first, m_subTaskCount++, i, blockSize));
         }
     }
 
@@ -97,14 +76,11 @@ SPTAG::Helper::TxtVectorReader::LoadFile(const std::string& p_filePaths)
     m_waitSignal.Reset(m_subTaskCount);
 
 #pragma omp parallel for schedule(dynamic)
-    for (int64_t i = 0; i < (int64_t)subWorks.size(); i++)
-    {
+    for (int64_t i = 0; i < (int64_t)subWorks.size(); i++) {
         SPTAG::ErrorCode code = subWorks[i]();
-        if (SPTAG::ErrorCode::Success != code)
-        {
+        if (SPTAG::ErrorCode::Success != code) {
             throw std::runtime_error("LoadFileInternal failed");
         }
-
     }
 
     m_waitSignal.Wait();
@@ -112,10 +88,8 @@ SPTAG::Helper::TxtVectorReader::LoadFile(const std::string& p_filePaths)
     return MergeData();
 }
 
-
 std::shared_ptr<SPTAG::VectorSet>
-SPTAG::Helper::TxtVectorReader::GetVectorSet(SizeType start, SizeType end) const
-{
+SPTAG::Helper::TxtVectorReader::GetVectorSet(SizeType start, SizeType end) const {
     auto ptr = SPTAG::f_createIO();
     if (ptr == nullptr || !ptr->Initialize(m_vectorOutput.c_str(), std::ios::binary | std::ios::in)) {
         LOG(Helper::LogLevel::LL_Error, "Failed to read file %s.\n", m_vectorOutput.c_str());
@@ -133,8 +107,10 @@ SPTAG::Helper::TxtVectorReader::GetVectorSet(SizeType start, SizeType end) const
         throw std::runtime_error("Failed to read vectorset file");
     }
 
-    if (start > row) start = row;
-    if (end < 0 || end > row) end = row;
+    if (start > row)
+        start = row;
+    if (end < 0 || end > row)
+        end = row;
     std::uint64_t totalRecordVectorBytes = ((std::uint64_t)SPTAG::GetValueTypeSize(m_options->m_inputValueType)) * (end - start) * col;
     SPTAG::ByteArray vectorSet;
     if (totalRecordVectorBytes > 0) {
@@ -146,28 +122,18 @@ SPTAG::Helper::TxtVectorReader::GetVectorSet(SizeType start, SizeType end) const
             throw std::runtime_error("Failed to read vectorset file");
         }
     }
-    return std::shared_ptr<SPTAG::VectorSet>(new SPTAG::BasicVectorSet(vectorSet,
-        m_options->m_inputValueType,
-        col,
-        end - start));
+    return std::shared_ptr<SPTAG::VectorSet>(new SPTAG::BasicVectorSet(vectorSet, m_options->m_inputValueType, col, end - start));
 }
 
-
 std::shared_ptr<SPTAG::MetadataSet>
-SPTAG::Helper::TxtVectorReader::GetMetadataSet() const
-{
+SPTAG::Helper::TxtVectorReader::GetMetadataSet() const {
     if (fileexists(m_metadataIndexOutput.c_str()) && fileexists(m_metadataConentOutput.c_str()))
         return std::shared_ptr<SPTAG::MetadataSet>(new SPTAG::FileMetadataSet(m_metadataConentOutput, m_metadataIndexOutput));
     return nullptr;
 }
 
-
 SPTAG::ErrorCode
-SPTAG::Helper::TxtVectorReader::LoadFileInternal(const std::string& p_filePath,
-                                std::uint32_t p_subTaskID,
-                                std::uint32_t p_fileBlockID,
-                                std::size_t p_fileBlockSize)
-{
+SPTAG::Helper::TxtVectorReader::LoadFileInternal(const std::string& p_filePath, std::uint32_t p_subTaskID, std::uint32_t p_fileBlockID, std::size_t p_fileBlockSize) {
     std::uint64_t lineBufferSize = 1 << 16;
     std::unique_ptr<char[]> currentLine(new char[lineBufferSize]);
 
@@ -177,9 +143,8 @@ SPTAG::Helper::TxtVectorReader::LoadFileInternal(const std::string& p_filePath,
     std::streamoff startpos = p_fileBlockID * p_fileBlockSize;
 
     std::shared_ptr<Helper::DiskIO> input = SPTAG::f_createIO(), output = SPTAG::f_createIO(), meta = SPTAG::f_createIO(), metaIndex = SPTAG::f_createIO();
-    if (input == nullptr || !input->Initialize(p_filePath.c_str(), std::ios::in | std::ios::binary))
-    {
-        LOG(Helper::LogLevel::LL_Error, "Unable to open file: %s\n",p_filePath.c_str());
+    if (input == nullptr || !input->Initialize(p_filePath.c_str(), std::ios::in | std::ios::binary)) {
+        LOG(Helper::LogLevel::LL_Error, "Unable to open file: %s\n", p_filePath.c_str());
         return SPTAG::ErrorCode::FailedOpenFile;
     }
 
@@ -191,14 +156,12 @@ SPTAG::Helper::TxtVectorReader::LoadFileInternal(const std::string& p_filePath,
 
     if (output == nullptr || !output->Initialize((m_vectorOutput + subFileSuffix).c_str(), std::ios::binary | std::ios::out) ||
         meta == nullptr || !meta->Initialize((m_metadataConentOutput + subFileSuffix).c_str(), std::ios::binary | std::ios::out) ||
-        metaIndex == nullptr || !metaIndex->Initialize((m_metadataIndexOutput + subFileSuffix).c_str(), std::ios::binary | std::ios::out))
-    {
+        metaIndex == nullptr || !metaIndex->Initialize((m_metadataIndexOutput + subFileSuffix).c_str(), std::ios::binary | std::ios::out)) {
         LOG(Helper::LogLevel::LL_Error, "Unable to create files: %s %s %s\n", (m_vectorOutput + subFileSuffix).c_str(), (m_metadataConentOutput + subFileSuffix).c_str(), (m_metadataIndexOutput + subFileSuffix).c_str());
         return SPTAG::ErrorCode::FailedCreateFile;
     }
 
-    if (p_fileBlockID != 0)
-    {
+    if (p_fileBlockID != 0) {
         totalRead += input->ReadString(lineBufferSize, currentLine, '\n', startpos);
     }
 
@@ -206,42 +169,38 @@ SPTAG::Helper::TxtVectorReader::LoadFileInternal(const std::string& p_filePath,
     std::unique_ptr<std::uint8_t[]> vector;
     vector.reset(new std::uint8_t[vectorByteSize]);
 
-    while (totalRead <= p_fileBlockSize)
-    {
+    while (totalRead <= p_fileBlockSize) {
         std::uint64_t lineLength = input->ReadString(lineBufferSize, currentLine);
-        if (lineLength == 0) break;
+        if (lineLength == 0)
+            break;
         totalRead += lineLength;
 
         std::size_t tabIndex = lineLength - 1;
-        while (tabIndex > 0 && currentLine[tabIndex] != '\t')
-        {
+        while (tabIndex > 0 && currentLine[tabIndex] != '\t') {
             --tabIndex;
         }
 
-        if (0 == tabIndex && currentLine[tabIndex] != '\t')
-        {
+        if (0 == tabIndex && currentLine[tabIndex] != '\t') {
             LOG(Helper::LogLevel::LL_Error, "Subtask: %u cannot parsing line:%s\n", p_subTaskID, currentLine.get());
             return SPTAG::ErrorCode::FailedParseValue;
         }
 
         bool parseSuccess = false;
-        switch (m_options->m_inputValueType)
-        {
-#define DefineVectorValueType(Name, Type) \
-        case SPTAG::VectorValueType::Name: \
-            parseSuccess = TranslateVector(currentLine.get() + tabIndex + 1, reinterpret_cast<Type*>(vector.get())); \
-            break; \
+        switch (m_options->m_inputValueType) {
+#define DefineVectorValueType(Name, Type)                                                                        \
+    case SPTAG::VectorValueType::Name:                                                                           \
+        parseSuccess = TranslateVector(currentLine.get() + tabIndex + 1, reinterpret_cast<Type*>(vector.get())); \
+        break;
 
 #include "Core/DefinitionList.h"
 #undef DefineVectorValueType
 
-        default:
-            parseSuccess = false;
-            break;
+            default:
+                parseSuccess = false;
+                break;
         }
 
-        if (!parseSuccess)
-        {
+        if (!parseSuccess) {
             LOG(Helper::LogLevel::LL_Error, "Subtask: %u cannot parsing vector:%s\n", p_subTaskID, currentLine.get());
             return SPTAG::ErrorCode::FailedParseValue;
         }
@@ -268,10 +227,8 @@ SPTAG::Helper::TxtVectorReader::LoadFileInternal(const std::string& p_filePath,
     return SPTAG::ErrorCode::Success;
 }
 
-
 SPTAG::ErrorCode
-SPTAG::Helper::TxtVectorReader::MergeData()
-{
+SPTAG::Helper::TxtVectorReader::MergeData() {
     const std::size_t bufferSize = 1 << 30;
     const std::size_t bufferSizeTrim64 = (bufferSize / sizeof(std::uint64_t)) * sizeof(std::uint64_t);
 
@@ -279,8 +236,7 @@ SPTAG::Helper::TxtVectorReader::MergeData()
 
     if (output == nullptr || !output->Initialize(m_vectorOutput.c_str(), std::ios::binary | std::ios::out) ||
         meta == nullptr || !meta->Initialize(m_metadataConentOutput.c_str(), std::ios::binary | std::ios::out) ||
-        metaIndex == nullptr || !metaIndex->Initialize(m_metadataIndexOutput.c_str(), std::ios::binary | std::ios::out))
-    {
+        metaIndex == nullptr || !metaIndex->Initialize(m_metadataIndexOutput.c_str(), std::ios::binary | std::ios::out)) {
         LOG(Helper::LogLevel::LL_Error, "Unable to create files: %s %s %s\n", m_vectorOutput.c_str(), m_metadataConentOutput.c_str(), m_metadataIndexOutput.c_str());
         return SPTAG::ErrorCode::FailedCreateFile;
     }
@@ -298,15 +254,13 @@ SPTAG::Helper::TxtVectorReader::MergeData()
         return SPTAG::ErrorCode::DiskIOFail;
     }
 
-    for (std::uint32_t i = 0; i < m_subTaskCount; ++i)
-    {
+    for (std::uint32_t i = 0; i < m_subTaskCount; ++i) {
         std::string file = m_vectorOutput;
         file += "_";
         file += std::to_string(i);
         file += ".tmp";
 
-        if (input == nullptr || !input->Initialize(file.c_str(), std::ios::binary | std::ios::in))
-        {
+        if (input == nullptr || !input->Initialize(file.c_str(), std::ios::binary | std::ios::in)) {
             LOG(Helper::LogLevel::LL_Error, "Unable to open file: %s\n", file.c_str());
             return SPTAG::ErrorCode::FailedOpenFile;
         }
@@ -322,15 +276,13 @@ SPTAG::Helper::TxtVectorReader::MergeData()
         remove(file.c_str());
     }
 
-    for (std::uint32_t i = 0; i < m_subTaskCount; ++i)
-    {
+    for (std::uint32_t i = 0; i < m_subTaskCount; ++i) {
         std::string file = m_metadataConentOutput;
         file += "_";
         file += std::to_string(i);
         file += ".tmp";
 
-        if (input == nullptr || !input->Initialize(file.c_str(), std::ios::binary | std::ios::in))
-        {
+        if (input == nullptr || !input->Initialize(file.c_str(), std::ios::binary | std::ios::in)) {
             LOG(Helper::LogLevel::LL_Error, "Unable to open file: %s\n", file.c_str());
             return SPTAG::ErrorCode::FailedOpenFile;
         }
@@ -352,29 +304,25 @@ SPTAG::Helper::TxtVectorReader::MergeData()
     }
 
     std::uint64_t totalOffset = 0;
-    for (std::uint32_t i = 0; i < m_subTaskCount; ++i)
-    {
+    for (std::uint32_t i = 0; i < m_subTaskCount; ++i) {
         std::string file = m_metadataIndexOutput;
         file += "_";
         file += std::to_string(i);
         file += ".tmp";
 
-        if (input == nullptr || !input->Initialize(file.c_str(), std::ios::binary | std::ios::in))
-        {
+        if (input == nullptr || !input->Initialize(file.c_str(), std::ios::binary | std::ios::in)) {
             LOG(Helper::LogLevel::LL_Error, "Unable to open file: %s\n", file.c_str());
             return SPTAG::ErrorCode::FailedOpenFile;
         }
 
-        for (SizeType remains = m_subTaskRecordCount[i]; remains > 0;)
-        {
+        for (SizeType remains = m_subTaskRecordCount[i]; remains > 0;) {
             std::size_t readBytesCount = min(remains * sizeof(std::uint64_t), bufferSizeTrim64);
             if (input->ReadBinary(readBytesCount, buf) != readBytesCount) {
                 LOG(Helper::LogLevel::LL_Error, "Unable to read file: %s\n", file.c_str());
                 return SPTAG::ErrorCode::DiskIOFail;
             }
             std::uint64_t* offset = reinterpret_cast<std::uint64_t*>(buf);
-            for (std::uint64_t i = 0; i < readBytesCount / sizeof(std::uint64_t); ++i)
-            {
+            for (std::uint64_t i = 0; i < readBytesCount / sizeof(std::uint64_t); ++i) {
                 offset[i] += totalOffset;
             }
 
@@ -401,18 +349,14 @@ SPTAG::Helper::TxtVectorReader::MergeData()
     return SPTAG::ErrorCode::Success;
 }
 
-
 std::vector<SPTAG::Helper::TxtVectorReader::FileInfoPair>
-SPTAG::Helper::TxtVectorReader::GetFileSizes(const std::string& p_filePaths)
-{
+SPTAG::Helper::TxtVectorReader::GetFileSizes(const std::string& p_filePaths) {
     const auto& files = Helper::StrUtils::SplitString(p_filePaths, ",");
     std::vector<TxtVectorReader::FileInfoPair> res;
     res.reserve(files.size());
 
-    for (const auto& filePath : files)
-    {
-        if (!fileexists(filePath.c_str()))
-        {
+    for (const auto& filePath : files) {
+        if (!fileexists(filePath.c_str())) {
             res.emplace_back(filePath, (std::numeric_limits<std::size_t>::max)());
             continue;
         }
@@ -424,5 +368,3 @@ SPTAG::Helper::TxtVectorReader::GetFileSizes(const std::string& p_filePaths)
 
     return res;
 }
-
-

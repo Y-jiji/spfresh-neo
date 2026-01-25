@@ -25,26 +25,24 @@
 #ifndef _SPTAG_COMMON_CUDA_GPUKNN_DISTANCE_H_
 #define _SPTAG_COMMON_CUDA_GPUKNN_DISTANCE_H_
 
-#include<cuda.h>
-#include<cstdint>
-#include<vector>
-#include<climits>
-#include<float.h>
-#include<unordered_set>
+#include <cuda.h>
+#include <cstdint>
+#include <vector>
+#include <climits>
+#include <float.h>
+#include <unordered_set>
 
 #include "Core/VectorIndex.h"
 
-
-
 // Templated infinity value
 /*********************************************************************
-* Object representing a Dim-dimensional point, with each coordinate
-* represented by a element of datatype T
-* NOTE: Dim must be templated so that we can store coordinate values in registers
-*********************************************************************/
-template<typename T, typename SUMTYPE, int Dim>
+ * Object representing a Dim-dimensional point, with each coordinate
+ * represented by a element of datatype T
+ * NOTE: Dim must be templated so that we can store coordinate values in registers
+ *********************************************************************/
+template <typename T, typename SUMTYPE, int Dim>
 class Point {
-public:
+   public:
     int id;
     T coords[Dim];
 
@@ -77,7 +75,7 @@ public:
 
     // Computes euclidean dist.  Uses 2 registers to increase pipeline efficiency and ILP
     __device__ __host__ SUMTYPE l2(Point<T, SUMTYPE, Dim>* other) {
-        SUMTYPE total[2] = { 0,0 };
+        SUMTYPE total[2] = {0, 0};
 
         for (int i = 0; i < Dim; i += 2) {
             total[0] += (coords[i] - other->coords[i]) * (coords[i] - other->coords[i]);
@@ -100,13 +98,12 @@ public:
         return final_val;
     }
 
-
     // Computes Cosine dist.  Uses 2 registers to increase pipeline efficiency and ILP
     // Assumes coordinates are normalized so each vector is of unit length.  This lets us
     // perform a dot-product instead of the full cosine distance computation.
-  //  __device__ SUMTYPE cosine(Point<T,SUMTYPE,Dim>* other, bool test) {return NULL;}
+    //  __device__ SUMTYPE cosine(Point<T,SUMTYPE,Dim>* other, bool test) {return NULL;}
     __device__ SUMTYPE cosine(Point<T, SUMTYPE, Dim>* other) {
-        SUMTYPE total[2] = { 0,0 };
+        SUMTYPE total[2] = {0, 0};
 
         for (int i = 0; i < Dim; i += 2) {
             total[0] += ((SUMTYPE)((SUMTYPE)coords[i] * (SUMTYPE)other->coords[i]));
@@ -116,24 +113,24 @@ public:
     }
 
     __forceinline__ __device__ SUMTYPE dist(Point<T, SUMTYPE, Dim>* other, int metric) {
-        if (metric == 0) return l2(other);
-        else return cosine(other);
+        if (metric == 0)
+            return l2(other);
+        else
+            return cosine(other);
     }
-
 };
 
 // Less-than operator between two points.
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ __device__ bool operator<(const Point<T, SUMTYPE, Dim>& first, const Point<T, SUMTYPE, Dim>& other) {
     return first.id < other.id;
 }
 
-
 // Specialized version of Point structure for 1-byte datatype (int8)
 // Packs coordinates into Dim/4 total integer values, and functions un-pack as needed
-template<typename SUMTYPE, int Dim>
+template <typename SUMTYPE, int Dim>
 class Point<uint8_t, SUMTYPE, Dim> {
-public:
+   public:
     int id;
     uint32_t coords[Dim / 4];
 
@@ -166,10 +163,11 @@ public:
         return *this;
     }
 
-    __device__ __host__ SUMTYPE l2_block(Point<uint8_t, SUMTYPE, Dim>* other) { return 0; }
+    __device__ __host__ SUMTYPE l2_block(Point<uint8_t, SUMTYPE, Dim>* other) {
+        return 0;
+    }
     __device__ __host__ SUMTYPE l2(Point<uint8_t, SUMTYPE, Dim>* other) {
-
-        SUMTYPE totals[4] = { 0,0,0,0 };
+        SUMTYPE totals[4] = {0, 0, 0, 0};
         SUMTYPE temp[4];
         SUMTYPE temp_other[4];
 
@@ -231,22 +229,22 @@ public:
 #endif
 
     __forceinline__ __device__ SUMTYPE dist(Point<uint8_t, SUMTYPE, Dim>* other, int metric) {
-        if (metric == 0) return l2(other);
-        else return cosine(other);
+        if (metric == 0)
+            return l2(other);
+        else
+            return cosine(other);
     }
-
 };
 
 // Specialized version of Point structure for SIGNED 1-byte datatype (int8)
 // Packs coordinates into Dim/4 total integer values, and functions un-pack as needed
-template<typename SUMTYPE, int Dim>
+template <typename SUMTYPE, int Dim>
 class Point<int8_t, SUMTYPE, Dim> {
-public:
+   public:
     int id;
     uint32_t coords[Dim / 4];
 
     __host__ void load(std::vector<int8_t> data) {
-
         uint8_t* test = reinterpret_cast<uint8_t*>(data.data());
         for (int i = 0; i < Dim / 4; i++) {
             coords[i] = 0;
@@ -257,7 +255,6 @@ public:
     }
 
     __host__ __device__ void loadChunk(int8_t* data, int exact_dims) {
-
         uint8_t* test = reinterpret_cast<uint8_t*>(data);
         for (int i = 0; i < exact_dims / 4; i++) {
             coords[i] = 0;
@@ -273,14 +270,11 @@ public:
     __host__ int8_t getVal(int idx) {
         if (idx % 4 == 0) {
             return (int8_t)(coords[idx / 4] & 0x000000FF);
-        }
-        else if (idx % 4 == 1) {
+        } else if (idx % 4 == 1) {
             return (int8_t)((coords[idx / 4] & 0x0000FF00) >> 8);
-        }
-        else if (idx % 4 == 2) {
+        } else if (idx % 4 == 2) {
             return (int8_t)((coords[idx / 4] & 0x00FF0000) >> 16);
-        }
-        else if (idx % 4 == 3) {
+        } else if (idx % 4 == 3) {
             return (int8_t)((coords[idx / 4]) >> 24);
         }
         return 0;
@@ -293,10 +287,11 @@ public:
         id = other.id;
         return *this;
     }
-    __device__ __host__ SUMTYPE l2_block(Point<int8_t, SUMTYPE, Dim>* other) { return 0; }
+    __device__ __host__ SUMTYPE l2_block(Point<int8_t, SUMTYPE, Dim>* other) {
+        return 0;
+    }
     __device__ __host__ SUMTYPE l2(Point<int8_t, SUMTYPE, Dim>* other) {
-
-        SUMTYPE totals[4] = { 0,0,0,0 };
+        SUMTYPE totals[4] = {0, 0, 0, 0};
         int32_t temp[4];
         int32_t temp_other[4];
 
@@ -320,7 +315,6 @@ public:
         }
         return totals[0] + totals[1] + totals[2] + totals[3];
     }
-
 
 #if __CUDA_ARCH__ > 610  // Use intrinsics if available for GPU being compiled for
     // With int8 datatype, values are packed into integers so they need to be
@@ -357,16 +351,17 @@ public:
 #endif
 
     __forceinline__ __device__ SUMTYPE dist(Point<int8_t, SUMTYPE, Dim>* other, int metric) {
-        if (metric == 0) return l2(other);
-        else return cosine(other);
+        if (metric == 0)
+            return l2(other);
+        else
+            return cosine(other);
     }
-
 };
 
 /*********************************************************************
  * Create an array of Point structures out of an input array
  ********************************************************************/
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ Point<T, SUMTYPE, Dim>* convertMatrix(T* data, size_t rows, int exact_dim) {
     Point<T, SUMTYPE, Dim>* pointArray = (Point<T, SUMTYPE, Dim>*)malloc(rows * sizeof(Point<T, SUMTYPE, Dim>));
     for (size_t i = 0; i < rows; i++) {
@@ -375,7 +370,7 @@ __host__ Point<T, SUMTYPE, Dim>* convertMatrix(T* data, size_t rows, int exact_d
     return pointArray;
 }
 
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ Point<T, SUMTYPE, Dim>* convertMatrix(SPTAG::VectorIndex* index, size_t rows, int exact_dim) {
     Point<T, SUMTYPE, Dim>* pointArray = (Point<T, SUMTYPE, Dim>*)malloc(rows * sizeof(Point<T, SUMTYPE, Dim>));
 
@@ -388,7 +383,7 @@ __host__ Point<T, SUMTYPE, Dim>* convertMatrix(SPTAG::VectorIndex* index, size_t
     return pointArray;
 }
 
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ void extractHeadPoints(T* data, Point<T, SUMTYPE, Dim>* headPoints, size_t totalRows, std::unordered_set<int> headVectorIDS, int exact_dim) {
     int headIdx = 0;
     for (size_t i = 0; i < totalRows; i++) {
@@ -400,7 +395,7 @@ __host__ void extractHeadPoints(T* data, Point<T, SUMTYPE, Dim>* headPoints, siz
     }
 }
 
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ void extractTailPoints(T* data, Point<T, SUMTYPE, Dim>* tailPoints, int totalRows, std::unordered_set<int> headVectorIDS, int exact_dim) {
     int tailIdx = 0;
     for (size_t i = 0; i < totalRows; i++) {
@@ -412,16 +407,15 @@ __host__ void extractTailPoints(T* data, Point<T, SUMTYPE, Dim>* tailPoints, int
     }
 }
 
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ void extractFullVectorPoints(T* data, Point<T, SUMTYPE, Dim>* tailPoints, size_t totalRows, int exact_dim) {
-
     for (size_t i = 0; i < totalRows; ++i) {
         tailPoints[i].loadChunk(&data[i * exact_dim], exact_dim);
         tailPoints[i].id = i;
     }
 }
 
-template<typename T, typename SUMTYPE, int Dim>
+template <typename T, typename SUMTYPE, int Dim>
 __host__ void extractHeadPointsFromIndex(T* data, SPTAG::VectorIndex* headIndex, Point<T, SUMTYPE, Dim>* headPoints, int exact_dim) {
     size_t headRows = headIndex->GetNumSamples();
 
@@ -435,9 +429,9 @@ __host__ void extractHeadPointsFromIndex(T* data, SPTAG::VectorIndex* headIndex,
  * Wrapper around shared memory holding transposed points to avoid
  * bank conflicts.
  ************************************************************************/
-template<typename T, int Dim, int Stride, typename SUMTYPE>
+template <typename T, int Dim, int Stride, typename SUMTYPE>
 class TransposePoint {
-public:
+   public:
     T* dataPtr;
 
     __device__ void setMem(T* ptr) {
@@ -457,8 +451,8 @@ public:
     }
 
     /******************************************************************************************
-    * Main L2 distance metric used by approx-KNN application.
-    ******************************************************************************************/
+     * Main L2 distance metric used by approx-KNN application.
+     ******************************************************************************************/
     __forceinline__ __device__ __host__ SUMTYPE l2(Point<T, SUMTYPE, Dim>* other) {
         SUMTYPE total = 0;
 #pragma unroll
@@ -470,10 +464,10 @@ public:
     }
 
     /******************************************************************************************
-    * Cosine distance metric comparison operation.  Requires that the SUMTYPE is floating point,
-    * regardless of the datatype T, because it requires squareroot.
-    ******************************************************************************************/
-    __forceinline__ __device__ __host__ SUMTYPE cosine(Point < T, SUMTYPE, Dim >* other) {
+     * Cosine distance metric comparison operation.  Requires that the SUMTYPE is floating point,
+     * regardless of the datatype T, because it requires squareroot.
+     ******************************************************************************************/
+    __forceinline__ __device__ __host__ SUMTYPE cosine(Point<T, SUMTYPE, Dim>* other) {
         SUMTYPE prod = 0;
         SUMTYPE a = 0;
         SUMTYPE b = 0;
@@ -488,13 +482,13 @@ public:
     }
 };
 
-template<int Dim, int Stride, typename SUMTYPE>
+template <int Dim, int Stride, typename SUMTYPE>
 class TransposePoint<int8_t, Dim, Stride, SUMTYPE> {
-public:
+   public:
     uint32_t* dataPtr;
 
     __device__ void setMem(void* ptr) {
-        dataPtr = reinterpret_cast <uint32_t*>(ptr);
+        dataPtr = reinterpret_cast<uint32_t*>(ptr);
     }
 
     // Load regular point into memory transposed
@@ -510,8 +504,7 @@ public:
     }
 
     __forceinline__ __device__ __host__ SUMTYPE l2(Point<int8_t, SUMTYPE, Dim>* other) {
-
-        SUMTYPE totals[4] = { 0,0,0,0 };
+        SUMTYPE totals[4] = {0, 0, 0, 0};
         int32_t temp[4];
         int32_t temp_other[4];
 
@@ -537,7 +530,7 @@ public:
     }
 
     __device__ __host__ SUMTYPE cosine(Point<int8_t, SUMTYPE, Dim>* other) {
-        SUMTYPE prod[4] = { 0,0,0,0 };
+        SUMTYPE prod[4] = {0, 0, 0, 0};
         int8_t temp[4];
         int8_t temp_other[4];
 
@@ -558,24 +551,24 @@ public:
             prod[1] += temp[1] * temp_other[1];
             prod[2] += temp[2] * temp_other[2];
             prod[3] += temp[3] * temp_other[3];
-            //prod[0] += ((int8_t)(getCoord(i) & 0x000000FF)) * ((int8_t)(other->coords[i] & 0x000000FF));
-            //prod[1] += ((int8_t)((getCoord(i) & 0x0000FF00) >> 8)) * ((int8_t)((other->coords[i] & 0x0000FF00) >> 8));
-            //prod[2] += ((int8_t)((getCoord(i) & 0x00FF0000) >> 16)) * ((int8_t)((other->coords[i] & 0x00FF0000) >> 16));
-            //prod[3] += ((int8_t)((getCoord(i)) >> 24)) * ((int8_t)((other->coords[i]) >> 24));
+            // prod[0] += ((int8_t)(getCoord(i) & 0x000000FF)) * ((int8_t)(other->coords[i] & 0x000000FF));
+            // prod[1] += ((int8_t)((getCoord(i) & 0x0000FF00) >> 8)) * ((int8_t)((other->coords[i] & 0x0000FF00) >> 8));
+            // prod[2] += ((int8_t)((getCoord(i) & 0x00FF0000) >> 16)) * ((int8_t)((other->coords[i] & 0x00FF0000) >> 16));
+            // prod[3] += ((int8_t)((getCoord(i)) >> 24)) * ((int8_t)((other->coords[i]) >> 24));
 
-            //prod[0] += prod[1] + prod[2] + prod[3];
+            // prod[0] += prod[1] + prod[2] + prod[3];
         }
         return ((SUMTYPE)65536) - prod[0] - prod[1] - prod[2] - prod[3];
     }
 };
 
-template<int Dim, int Stride, typename SUMTYPE>
+template <int Dim, int Stride, typename SUMTYPE>
 class TransposePoint<uint8_t, Dim, Stride, SUMTYPE> {
-public:
+   public:
     uint32_t* dataPtr;
 
     __device__ void setMem(void* ptr) {
-        dataPtr = reinterpret_cast <uint32_t*>(ptr);
+        dataPtr = reinterpret_cast<uint32_t*>(ptr);
     }
 
     // Load regular point into memory transposed
@@ -591,8 +584,7 @@ public:
     }
 
     __forceinline__ __device__ __host__ SUMTYPE l2(Point<uint8_t, SUMTYPE, Dim>* other) {
-
-        SUMTYPE totals[4] = { 0,0,0,0 };
+        SUMTYPE totals[4] = {0, 0, 0, 0};
         int32_t temp[4];
         int32_t temp_other[4];
 
