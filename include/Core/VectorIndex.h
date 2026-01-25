@@ -11,6 +11,7 @@
 #include "Helper/SimpleIniReader.h"
 #include <unordered_set>
 #include "Core/Common/IQuantizer.h"
+#include "MetaDataManager.h"
 
 namespace SPTAG
 {
@@ -99,14 +100,15 @@ public:
     virtual MetadataSet* GetMetadata() const;
     virtual void SetMetadata(MetadataSet* p_new);
 
-    virtual std::string GetIndexName() const 
-    { 
-        if (m_sIndexName == "") return Helper::Convert::ConvertToString(GetIndexAlgoType());
-        return m_sIndexName; 
+    virtual std::string GetIndexName() const
+    {
+        std::string name = m_metadataManager.GetIndexName();
+        if (name == "") return Helper::Convert::ConvertToString(GetIndexAlgoType());
+        return name;
     }
-    virtual void SetIndexName(std::string p_name) { m_sIndexName = p_name; }
+    virtual void SetIndexName(std::string p_name) { m_metadataManager.SetIndexName(p_name); }
 
-    virtual void SetQuantizerFileName(std::string p_QuantizerFileName) { m_sQuantizerFile = p_QuantizerFileName; }
+    virtual void SetQuantizerFileName(std::string p_QuantizerFileName) { m_metadataManager.SetQuantizerFile(p_QuantizerFileName); }
 
     virtual void SetQuantizerADC(bool enableADC) {
         if (m_pQuantizer) m_pQuantizer->SetEnableADC(enableADC);
@@ -144,7 +146,7 @@ public:
 
     virtual ErrorCode RefineIndex(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams, IAbortOperation* p_abort) = 0;
 
-    inline bool HasMetaMapping() const { return nullptr != m_pMetaToVec; }
+    inline bool HasMetaMapping() const { return m_metadataManager.HasMetaMapping(); }
 
     inline SizeType GetMetaMapping(std::string& meta) const;
 
@@ -159,12 +161,8 @@ private:
 
 protected:
     bool m_bReady = false;
-    std::string m_sIndexName = "";
-    std::string m_sMetadataFile = "metadata.bin";
-    std::string m_sMetadataIndexFile = "metadataIndex.bin";
-    std::string m_sQuantizerFile = "quantizer.bin";
     std::shared_ptr<MetadataSet> m_pMetadata;
-    std::shared_ptr<void> m_pMetaToVec;
+    MetaDataManager m_metadataManager;
 
 public:
     int m_iDataBlockSize = 1024 * 1024;

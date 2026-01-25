@@ -4,6 +4,14 @@
 #ifndef _SPTAG_COMMON_DATASET_H_
 #define _SPTAG_COMMON_DATASET_H_
 
+#include "Core/Common.h"
+#include <string>
+#include <memory>
+#include <vector>
+#include <cstddef>
+#include <cstring>
+#include <cmath>
+
 namespace SPTAG
 {
     namespace COMMON

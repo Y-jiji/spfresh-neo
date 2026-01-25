@@ -1,13 +1,13 @@
-#include "Helper/KeyValueIO.h"
+#include "Core/SPANN/ExtraSPDKController.h"
 #include <atomic>
 
 namespace SPTAG {
     namespace SPANN {
-        // concurrently safe with KeyValueIO implementations
+        // concurrently safe with SPDKIO
         class PersistentBuffer
         {
         public:
-            PersistentBuffer(std::shared_ptr<Helper::KeyValueIO> db) : db(db), _size(0) { }
+            PersistentBuffer(std::shared_ptr<SPDKIO> db) : db(db), _size(0) { }
 
             ~PersistentBuffer() {}
 
@@ -31,7 +31,7 @@ namespace SPTAG {
             }
 
         private:
-            std::shared_ptr<Helper::KeyValueIO> db;
+            std::shared_ptr<SPDKIO> db;
             std::atomic_int _size;
         };
     }

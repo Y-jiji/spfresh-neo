@@ -9,11 +9,12 @@
 #include "IExtraSearcher.h"
 #include "ExtraStaticSearcher.h"
 #include "Core/Common/TruthSet.h"
-#include "Helper/KeyValueIO.h"
 #include "Core/Common/FineGrainedLock.h"
 #include "PersistentBuffer.h"
 #include "Core/Common/PostingSizeRecord.h"
 #include "ExtraSPDKController.h"
+
+using SPDKIO = SPTAG::SPANN::SPDKIO;
 #include <chrono>
 #include <map>
 #include <cmath>
@@ -130,7 +131,7 @@ namespace SPTAG::SPANN {
         };
 
     private:
-        std::shared_ptr<Helper::KeyValueIO> db;
+        std::shared_ptr<SPDKIO> db;
 
         COMMON::VersionLabel* m_versionMap;
         Options* m_opt;

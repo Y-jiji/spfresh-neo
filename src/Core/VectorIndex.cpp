@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "Core/VectorIndex.h"
+#include "Core/MetaDataManager.h"
 #include "Helper/CommonHelper.h"
 #include "Helper/StringConvert.h"
 #include "Helper/SimpleIniReader.h"
@@ -160,14 +161,14 @@ VectorIndex::LoadIndexConfig(Helper::IniReader& p_reader)
     std::string metadataSection("MetaData");
     if (p_reader.DoesSectionExist(metadataSection))
     {
-        m_sMetadataFile = p_reader.GetParameter(metadataSection, "MetaDataFilePath", std::string());
-        m_sMetadataIndexFile = p_reader.GetParameter(metadataSection, "MetaDataIndexPath", std::string());
+        m_metadataManager.SetMetadataFile(p_reader.GetParameter(metadataSection, "MetaDataFilePath", std::string()));
+        m_metadataManager.SetMetadataIndexFile(p_reader.GetParameter(metadataSection, "MetaDataIndexPath", std::string()));
     }
 
     std::string quantizerSection("Quantizer");
     if (p_reader.DoesSectionExist(quantizerSection))
     {
-        m_sQuantizerFile = p_reader.GetParameter(quantizerSection, "QuantizerFilePath", std::string());
+        m_metadataManager.SetQuantizerFile(p_reader.GetParameter(quantizerSection, "QuantizerFilePath", std::string()));
     }
     return LoadConfig(p_reader);
 }
@@ -179,16 +180,16 @@ VectorIndex::SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut)
     if (nullptr != m_pMetadata)
     {
         IOSTRING(p_configOut, WriteString, "[MetaData]\n");
-        IOSTRING(p_configOut, WriteString, ("MetaDataFilePath=" + m_sMetadataFile + "\n").c_str());
-        IOSTRING(p_configOut, WriteString, ("MetaDataIndexPath=" + m_sMetadataIndexFile + "\n").c_str());
-        if (nullptr != m_pMetaToVec) IOSTRING(p_configOut, WriteString, "MetaDataToVectorIndex=true\n");
+        IOSTRING(p_configOut, WriteString, ("MetaDataFilePath=" + m_metadataManager.GetMetadataFile() + "\n").c_str());
+        IOSTRING(p_configOut, WriteString, ("MetaDataIndexPath=" + m_metadataManager.GetMetadataIndexFile() + "\n").c_str());
+        if (m_metadataManager.HasMetaMapping()) IOSTRING(p_configOut, WriteString, "MetaDataToVectorIndex=true\n");
         IOSTRING(p_configOut, WriteString, "\n");
     }
 
     if (m_pQuantizer)
     {
         IOSTRING(p_configOut, WriteString, "[Quantizer]\n");
-        IOSTRING(p_configOut, WriteString, ("QuantizerFilePath=" + m_sQuantizerFile + "\n").c_str());
+        IOSTRING(p_configOut, WriteString, ("QuantizerFilePath=" + m_metadataManager.GetQuantizerFile() + "\n").c_str());
         IOSTRING(p_configOut, WriteString, "\n");
     }
 
@@ -204,34 +205,27 @@ VectorIndex::SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut)
 SizeType
 VectorIndex::GetMetaMapping(std::string& meta) const
 {
-    MetadataMap* ptr = static_cast<MetadataMap*>(m_pMetaToVec.get());
-    auto iter = ptr->find(meta);
-    if (iter != ptr->end()) return iter->second;
-    return -1;
+    return m_metadataManager.GetMetaMapping(meta);
 }
 
 
 void
 VectorIndex::UpdateMetaMapping(const std::string& meta, SizeType i)
 {
-    MetadataMap* ptr = static_cast<MetadataMap*>(m_pMetaToVec.get());
-    auto iter = ptr->find(meta);
-    if (iter != ptr->end()) DeleteIndex(iter->second);
-    (*ptr)[meta] = i;
+    SizeType existing = m_metadataManager.GetMetaMapping(const_cast<std::string&>(meta));
+    if (existing >= 0) DeleteIndex(existing);
+    m_metadataManager.UpdateMetaMapping(meta, i);
 }
 
 
 void
 VectorIndex::BuildMetaMapping(bool p_checkDeleted)
 {
-    MetadataMap* ptr = new MetadataMap(m_iDataBlockSize);
-    for (SizeType i = 0; i < m_pMetadata->Count(); i++) {
-        if (!p_checkDeleted || ContainSample(i)) {
-            ByteArray meta = m_pMetadata->GetMetadata(i);
-            (*ptr)[std::string((char*)meta.Data(), meta.Length())] = i;
-        }
-    }
-    m_pMetaToVec.reset(ptr, std::default_delete<MetadataMap>());
+    m_metadataManager.BuildMetaMapping(m_pMetadata.get(), GetNumSamples(),
+        std::function<bool(SizeType)>([this](SizeType idx) -> bool {
+            return this->ContainSample(idx);
+        }),
+        m_iDataBlockSize, p_checkDeleted);
 }
 
 
@@ -320,11 +314,11 @@ VectorIndex::SaveIndex(const std::string& p_folderPath)
 
     std::shared_ptr<std::vector<std::string>> indexfiles = GetIndexFiles();
     if (nullptr != m_pMetadata) {
-        indexfiles->push_back(m_sMetadataFile);
-        indexfiles->push_back(m_sMetadataIndexFile);
+        indexfiles->push_back(m_metadataManager.GetMetadataFile());
+        indexfiles->push_back(m_metadataManager.GetMetadataIndexFile());
     }
     if (m_pQuantizer) {
-        indexfiles->push_back(m_sQuantizerFile);
+        indexfiles->push_back(m_metadataManager.GetQuantizerFile());
     }
     std::vector<std::shared_ptr<Helper::DiskIO>> handles;
     for (std::string& f : *indexfiles) {
@@ -451,7 +445,7 @@ VectorIndex::AddIndex(std::shared_ptr<VectorSet> p_vectorSet, std::shared_ptr<Me
 
 ErrorCode
 VectorIndex::DeleteIndex(ByteArray p_meta) {
-    if (m_pMetaToVec == nullptr) return ErrorCode::VectorNotFound;
+    if (!m_metadataManager.HasMetaMapping()) return ErrorCode::VectorNotFound;
 
     std::string meta((char*)p_meta.Data(), p_meta.Length());
     SizeType vid = GetMetaMapping(meta);
@@ -507,7 +501,7 @@ VectorIndex::MergeIndex(VectorIndex* p_addindex, int p_threadnum, IAbortOperatio
 
 const void* VectorIndex::GetSample(ByteArray p_meta, bool& deleteFlag)
 {
-    if (m_pMetaToVec == nullptr) return nullptr;
+    if (!m_metadataManager.HasMetaMapping()) return nullptr;
 
     std::string meta((char*)p_meta.Data(), p_meta.Length());
     SizeType vid = GetMetaMapping(meta);
@@ -594,11 +588,11 @@ VectorIndex::LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<Vect
 
     std::shared_ptr<std::vector<std::string>> indexfiles = p_vectorIndex->GetIndexFiles();
     if (iniReader.DoesSectionExist("MetaData")) {
-        indexfiles->push_back(p_vectorIndex->m_sMetadataFile);
-        indexfiles->push_back(p_vectorIndex->m_sMetadataIndexFile);
+        indexfiles->push_back(p_vectorIndex->m_metadataManager.GetMetadataFile());
+        indexfiles->push_back(p_vectorIndex->m_metadataManager.GetMetadataIndexFile());
     }
     if (iniReader.DoesSectionExist("Quantizer")) {
-        indexfiles->push_back(p_vectorIndex->m_sQuantizerFile);
+        indexfiles->push_back(p_vectorIndex->m_metadataManager.GetQuantizerFile());
     }
     std::vector<std::shared_ptr<Helper::DiskIO>> handles;
     for (std::string& f : *indexfiles) {

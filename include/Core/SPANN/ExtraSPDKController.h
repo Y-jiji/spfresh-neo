@@ -1,10 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+// Licensed under MIT License.
 
 #ifndef _SPTAG_SPANN_EXTRASPDKCONTROLLER_H_
 #define _SPTAG_SPANN_EXTRASPDKCONTROLLER_H_
 
-#include "Helper/KeyValueIO.h"
 #include "Core/Common/Dataset.h"
 #include "Core/VectorIndex.h"
 #include "Helper/ThreadPool.h"
@@ -26,7 +25,7 @@ extern "C" {
 namespace SPTAG::SPANN
 {
     typedef std::int64_t AddressType;
-    class SPDKIO : public Helper::KeyValueIO
+    class SPDKIO
     {
         class BlockController {
         private:
@@ -165,7 +164,7 @@ namespace SPTAG::SPANN
             ShutDown();
         }
 
-        void ShutDown() override {
+        void ShutDown() {
             if (m_shutdownCalled) {
                 return;
             }
@@ -185,7 +184,7 @@ namespace SPTAG::SPANN
             return *(m_pBlockMapping[key]);
         }
 
-        ErrorCode Get(SizeType key, std::string* value) override {
+        ErrorCode Get(SizeType key, std::string* value) {
             if (key >= m_pBlockMapping.R()) return ErrorCode::Fail;
 
             if (m_pBlockController.ReadBlocks((AddressType*)At(key), value)) return ErrorCode::Success;
@@ -204,7 +203,7 @@ namespace SPTAG::SPANN
             return ErrorCode::Fail; 
         }
 
-        ErrorCode Put(SizeType key, const std::string& value) override {
+        ErrorCode Put(SizeType key, const std::string& value) {
             int blocks = ((value.size() + PageSize - 1) >> PageSizeEx);
             if (blocks >= m_blockLimit) {
                 LOG(Helper::LogLevel::LL_Error, "Failt to put key:%d value:%lld since value too long!\n", key, value.size());
@@ -295,7 +294,7 @@ namespace SPTAG::SPANN
             return ErrorCode::Success;
         }
 
-        ErrorCode Delete(SizeType key) override {
+        ErrorCode Delete(SizeType key) {
             if (key >= m_pBlockMapping.R()) return ErrorCode::Fail;
             int64_t* postingSize = (int64_t*)At(key);
             if (*postingSize < 0) return ErrorCode::Fail;
@@ -359,12 +358,12 @@ namespace SPTAG::SPANN
             return ErrorCode::Success;
         }
 
-        bool Initialize(bool debug = false) override {
+        bool Initialize(bool debug = false) {
             if (debug) LOG(Helper::LogLevel::LL_Info, "Initialize SPDK for new threads\n");
             return m_pBlockController.Initialize(64);
         }
 
-        bool ExitBlockController(bool debug = false) override { 
+        bool ExitBlockController(bool debug = false) { 
             if (debug) LOG(Helper::LogLevel::LL_Info, "Exit SPDK for thread\n");
             return m_pBlockController.ShutDown(); 
         }
