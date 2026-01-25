@@ -97,12 +97,6 @@ DefineVectorValueType(Int8, std::int8_t)
     // 2nd vector
     // ..
     DefineVectorFileType(DEFAULT)
-    // dimension of 1st vector(int32_t), 1st vector
-    // dimension of 2nd vector(int32_t), 2nd vector
-    // ...
-    DefineVectorFileType(XVEC)
-    // vectors that have names and are viewable
-    DefineVectorFileType(TXT)
 
 #endif  // DefineVectorFileType
 

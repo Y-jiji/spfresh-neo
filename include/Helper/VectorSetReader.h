@@ -38,11 +38,11 @@ class VectorSetReader {
 
     virtual ~VectorSetReader();
 
-    virtual ErrorCode LoadFile(const std::string& p_filePath) = 0;
+    virtual ErrorCode LoadFile(const std::string& p_filePath);
 
-    virtual std::shared_ptr<VectorSet> GetVectorSet(SizeType start = 0, SizeType end = -1) const = 0;
+    virtual std::shared_ptr<VectorSet> GetVectorSet(SizeType start = 0, SizeType end = -1) const;
 
-    virtual std::shared_ptr<MetadataSet> GetMetadataSet() const = 0;
+    virtual std::shared_ptr<MetadataSet> GetMetadataSet() const;
 
     virtual bool IsNormalized() const {
         return m_options->m_normalized;
@@ -52,6 +52,12 @@ class VectorSetReader {
 
    protected:
     std::shared_ptr<ReaderOptions> m_options;
+
+    std::string m_vectorOutput;
+
+    std::string m_metadataConentOutput;
+
+    std::string m_metadataIndexOutput;
 };
 
 }  // namespace SPTAG::Helper
