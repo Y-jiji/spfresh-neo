@@ -51,54 +51,22 @@ target_link_libraries(SPTAGLib PUBLIC
     PkgConfig::ZSTD
 )
 
-file(GLOB SERVER_HDR_FILES include/Server/*.h include/Socket/*.h)
-file(GLOB SERVER_FILES src/Server/*.cpp src/Socket/*.cpp)
-add_executable (server ${SERVER_FILES})
-target_link_libraries(server Boost::headers SPTAGLib)
-target_include_directories(server PRIVATE
+file(GLOB SPFRESH_HDR_FILES include/SPFresh/*.h)
+file(GLOB SPFRESH_FILES src/SPFresh/*.cpp)
+add_executable(spfresh ${SPFRESH_FILES})
+target_compile_definitions(spfresh PRIVATE _exe)
+target_link_libraries(spfresh PRIVATE Boost::headers SPTAGLib)
+target_include_directories(spfresh PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-file(GLOB CLIENT_HDR_FILES include/Client/*.h include/Socket/*.h)
-file(GLOB CLIENT_FILES src/Client/*.cpp src/Socket/*.cpp)
-add_executable (client ${CLIENT_FILES})
-target_link_libraries(client PRIVATE Boost::headers SPTAGLib)
-target_include_directories(client PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-file(GLOB AGG_HDR_FILES include/Aggregator/*.h include/Socket/*.h include/Server/QueryParser.h)
-file(GLOB AGG_FILES src/Aggregator/*.cpp src/Socket/*.cpp src/Server/QueryParser.cpp)
-add_executable (aggregator ${AGG_FILES})
-target_link_libraries(aggregator PRIVATE Boost::headers SPTAGLib)
-target_include_directories(aggregator PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-file(GLOB BUILDER_FILES src/IndexBuilder/*.cpp)
-add_executable (indexbuilder ${BUILDER_FILES})
-target_link_libraries(indexbuilder PRIVATE Boost::headers SPTAGLib)
-target_include_directories(indexbuilder PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-file(GLOB SEARCHER_FILES src/IndexSearcher/*.cpp)
-add_executable (indexsearcher ${SEARCHER_FILES})
-target_link_libraries(indexsearcher PRIVATE Boost::headers SPTAGLib)
-target_include_directories(indexsearcher PRIVATE 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-file(GLOB QUANTIZER_HDR_FILES include/Quantizer/*.h)
-file(GLOB QUANTIZER_FILES src/Quantizer/*.cpp)
-add_executable (quantizer ${QUANTIZER_FILES})
-target_link_libraries(quantizer PRIVATE Boost::headers SPTAGLib)
-target_include_directories(quantizer PRIVATE
+file(GLOB SSDSERVING_HDR_FILES include/SSDServing/*.h)
+file(GLOB SSDSERVING_FILES src/SSDServing/*.cpp)
+add_executable(ssdserving ${SSDSERVING_FILES})
+target_compile_definitions(ssdserving PRIVATE _exe)
+target_link_libraries(ssdserving PRIVATE Boost::headers SPTAGLib)
+target_include_directories(ssdserving PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
