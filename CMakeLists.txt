@@ -37,7 +37,7 @@ target_link_libraries(SPTAGLib PUBLIC
 )
 
 file(GLOB SPFRESH_HDR_FILES include/SPFresh/*.h)
-file(GLOB SPFRESH_FILES src/SPFresh/*.cpp)
+file(GLOB SPFRESH_FILES bin/spfresh.cpp)
 add_executable(spfresh ${SPFRESH_FILES})
 target_compile_definitions(spfresh PRIVATE _exe)
 target_link_libraries(spfresh PRIVATE Boost::headers SPTAGLib)
@@ -47,7 +47,7 @@ target_include_directories(spfresh PRIVATE
 )
 
 file(GLOB SSDSERVING_HDR_FILES include/SSDServing/*.h)
-file(GLOB SSDSERVING_FILES src/SSDServing/*.cpp)
+file(GLOB SSDSERVING_FILES bin/ssdserving.cpp)
 add_executable(ssdserving ${SSDSERVING_FILES})
 target_compile_definitions(ssdserving PRIVATE _exe)
 target_link_libraries(ssdserving PRIVATE Boost::headers SPTAGLib)
