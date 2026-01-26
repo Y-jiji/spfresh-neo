@@ -664,31 +664,17 @@ SPTAG::VectorIndex::LoadIndex(const std::string& p_config, const std::vector<SPT
 }
 
 std::uint64_t SPTAG::VectorIndex::EstimatedVectorCount(std::uint64_t p_memory, SPTAG::DimensionType p_dimension, SPTAG::VectorValueType p_valuetype, SPTAG::SizeType p_vectorsInBlock, SPTAG::SizeType p_maxmeta, SPTAG::IndexAlgoType p_algo, int p_treeNumber, int p_neighborhoodSize) {
-    size_t treeNodeSize;
     if (p_algo == SPTAG::IndexAlgoType::BKT) {
-        treeNodeSize = sizeof(SPTAG::SizeType) * 3;
-    } else {
-        return 0;
+        return SPTAG::BKT::EstimatedVectorCount(p_memory, p_dimension, p_valuetype, p_vectorsInBlock, p_maxmeta, p_treeNumber, p_neighborhoodSize);
     }
-    std::uint64_t unit = GetValueTypeSize(p_valuetype) * p_dimension + p_maxmeta + sizeof(std::uint64_t) + sizeof(SPTAG::SizeType) * p_neighborhoodSize + 1 + treeNodeSize * p_treeNumber;
-    return ((p_memory / unit) / p_vectorsInBlock) * p_vectorsInBlock;
+    return 0;
 }
 
 std::uint64_t SPTAG::VectorIndex::EstimatedMemoryUsage(std::uint64_t p_vectorCount, SPTAG::DimensionType p_dimension, SPTAG::VectorValueType p_valuetype, SPTAG::SizeType p_vectorsInBlock, SPTAG::SizeType p_maxmeta, SPTAG::IndexAlgoType p_algo, int p_treeNumber, int p_neighborhoodSize) {
-    p_vectorCount = ((p_vectorCount + p_vectorsInBlock - 1) / p_vectorsInBlock) * p_vectorsInBlock;
-    size_t treeNodeSize;
-    if (p_algo == IndexAlgoType::BKT) {
-        treeNodeSize = sizeof(SizeType) * 3;
-    } else {
-        return 0;
+    if (p_algo == SPTAG::IndexAlgoType::BKT) {
+        return SPTAG::BKT::EstimatedMemoryUsage(p_vectorCount, p_dimension, p_valuetype, p_vectorsInBlock, p_maxmeta, p_treeNumber, p_neighborhoodSize);
     }
-    std::uint64_t ret = GetValueTypeSize(p_valuetype) * p_dimension * p_vectorCount;  // Vector Size
-    ret += p_maxmeta * p_vectorCount;                                                 // MetaData Size
-    ret += sizeof(std::uint64_t) * p_vectorCount;                                     // MetaIndex Size
-    ret += sizeof(SizeType) * p_neighborhoodSize * p_vectorCount;                     // Graph Size
-    ret += p_vectorCount;                                                             // DeletedFlag Size
-    ret += treeNodeSize * p_treeNumber * p_vectorCount;                               // Tree Size
-    return ret;
+    return 0;
 }
 
 #if defined(GPU)

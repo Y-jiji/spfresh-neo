@@ -110,7 +110,7 @@ struct Selection {
     }
 
 template <typename ValueType>
-class ExtraStaticSearcher : public IExtraSearcher {
+class ExtraStaticSearcher {
    public:
     ExtraStaticSearcher() {
         m_enableDeltaEncoding = false;
@@ -1142,7 +1142,8 @@ class ExtraStaticSearcher : public IExtraSearcher {
         LOG(Helper::LogLevel::LL_Info, "Time to write results:%.2lf sec.\n", ((double)std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count()) + ((double)std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()) / 1000);
     }
 
-    void GetWritePosting(SizeType pid, std::string& posting, bool write = false) override {
+   public:
+    void GetWritePosting(SizeType pid, std::string& posting, bool write = false) {
         if (write) {
             LOG(Helper::LogLevel::LL_Error, "Unsupport write\n");
             exit(1);

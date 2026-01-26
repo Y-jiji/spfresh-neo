@@ -194,6 +194,11 @@ class Index : public VectorIndex {
     void Search(COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_space, std::function<bool(const ByteArray&)> filterFunc) const;
 };
 
+// Estimation methods (BKT-specific)
+std::uint64_t EstimatedVectorCount(std::uint64_t p_memory, DimensionType p_dimension, VectorValueType p_valuetype, SizeType p_vectorsInBlock, SizeType p_maxmeta, int p_treeNumber, int p_neighborhoodSize);
+
+std::uint64_t EstimatedMemoryUsage(std::uint64_t p_vectorCount, DimensionType p_dimension, VectorValueType p_valuetype, SizeType p_vectorsInBlock, SizeType p_maxmeta, int p_treeNumber, int p_neighborhoodSize);
+
 }  // namespace SPTAG::BKT
 
 #endif  // _SPTAG_BKT_INDEX_H_

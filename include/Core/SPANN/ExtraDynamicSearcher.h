@@ -30,7 +30,7 @@ using SPDKIO = SPTAG::SPANN::SPDKIO;
 
 namespace SPTAG::SPANN {
 template <typename ValueType>
-class ExtraDynamicSearcher : public IExtraSearcher {
+class ExtraDynamicSearcher {
     class MergeAsyncJob : public Helper::ThreadPool::Job {
        private:
         VectorIndex* m_index;
@@ -1050,7 +1050,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
         m_stat.m_reAssignCost += elapsedMSeconds;
     }
 
-    bool LoadIndex(Options& p_opt, COMMON::VersionLabel& p_versionMap) override {
+    bool LoadIndex(Options& p_opt, COMMON::VersionLabel& p_versionMap) {
         m_versionMap = &p_versionMap;
         m_opt = &p_opt;
         LOG(Helper::LogLevel::LL_Info, "DataBlockSize: %d, Capacity: %d\n", m_opt->m_datasetRowsInBlock, m_opt->m_datasetCapacity);
@@ -1066,7 +1066,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
         return true;
     }
 
-    virtual void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<VectorIndex> p_index, SearchStats* p_stats, std::set<int>* truth, std::map<int, std::set<int>>* found) override {
+    void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<VectorIndex> p_index, SearchStats* p_stats, std::set<int>* truth, std::map<int, std::set<int>>* found) {
         auto exStart = std::chrono::high_resolution_clock::now();
 
         // const auto postingListCount = static_cast<uint32_t>(p_exWorkSpace->m_postingIDs.size());
@@ -1151,7 +1151,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
         }
     }
 
-    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) override {
+    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
         m_versionMap = &p_versionMap;
         m_opt = &p_opt;
 
@@ -1431,7 +1431,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
         }
     }
 
-    ErrorCode AddIndex(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, SizeType begin) override {
+    ErrorCode AddIndex(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, SizeType begin) {
         for (int v = 0; v < p_vectorSet->Count(); v++) {
             SizeType VID = begin + v;
             std::vector<Edge> selections(static_cast<size_t>(m_opt->m_replicaCount));
@@ -1449,7 +1449,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
         return ErrorCode::Success;
     }
 
-    SizeType SearchVector(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, int testNum = 64, SizeType VID = -1) override {
+    SizeType SearchVector(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, int testNum = 64, SizeType VID = -1) {
         QueryResult queryResults(p_vectorSet->GetVector(0), testNum, false);
         p_index->SearchIndex(queryResults);
 
@@ -1476,7 +1476,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
         return -1;
     }
 
-    void ForceGC(VectorIndex* p_index) override {
+    void ForceGC(VectorIndex* p_index) {
         for (int i = 0; i < p_index->GetNumSamples(); i++) {
             if (!p_index->ContainSample(i))
                 continue;
@@ -1487,31 +1487,31 @@ class ExtraDynamicSearcher : public IExtraSearcher {
     bool AllFinished() {
         return m_splitThreadPool->allClear() && m_reassignThreadPool->allClear();
     }
-    void ForceCompaction() override {
+    void ForceCompaction() {
         db->ForceCompaction();
     }
-    void GetDBStats() override {
+    void GetDBStats() {
         db->GetStat();
         LOG(Helper::LogLevel::LL_Info, "remain splitJobs: %d, reassignJobs: %d, running split: %d, running reassign: %d\n", m_splitThreadPool->jobsize(), m_reassignThreadPool->jobsize(), m_splitThreadPool->runningJobs(), m_reassignThreadPool->runningJobs());
     }
 
-    void GetIndexStats(int finishedInsert, bool cost, bool reset) override {
+    void GetIndexStats(int finishedInsert, bool cost, bool reset) {
         m_stat.PrintStat(finishedInsert, cost, reset);
     }
 
-    bool CheckValidPosting(SizeType postingID) override {
+    bool CheckValidPosting(SizeType postingID) {
         return m_postingSizes.GetSize(postingID) > 0;
     }
 
-    bool Initialize() override {
+    bool Initialize() {
         return db->Initialize();
     }
 
-    bool ExitBlockController() override {
+    bool ExitBlockController() {
         return db->ExitBlockController();
     }
 
-    void GetWritePosting(SizeType pid, std::string& posting, bool write = false) override {
+    void GetWritePosting(SizeType pid, std::string& posting, bool write = false) {
         if (write) {
             db->Put(pid, posting);
             m_postingSizes.UpdateSize(pid, posting.size() / m_vectorInfoSize);

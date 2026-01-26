@@ -262,6 +262,7 @@ class Index : public VectorIndex {
         return m_extraSearcher->AddIndex(vectorSet, m_index, begin);
     }
 };
+
 }  // namespace SPTAG::SPANN
 
 #endif  // _SPTAG_SPANN_INDEX_H_

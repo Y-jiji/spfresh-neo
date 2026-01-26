@@ -244,67 +244,6 @@ struct ExtraWorkSpace {
     static std::atomic_int g_spaceCount;
 };
 
-class IExtraSearcher {
-   public:
-    IExtraSearcher() {
-    }
-
-    ~IExtraSearcher() {
-    }
-
-    virtual bool LoadIndex(Options& p_options, COMMON::VersionLabel& p_versionMap) = 0;
-
-    virtual void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<VectorIndex> p_index, SearchStats* p_stats, std::set<int>* truth = nullptr, std::map<int, std::set<int>>* found = nullptr) = 0;
-
-    virtual bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_index, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) = 0;
-
-    virtual void RefineIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_index) {
-        return;
-    }
-    virtual ErrorCode AddIndex(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, SizeType p_begin) {
-        return ErrorCode::Undefined;
-    }
-    virtual ErrorCode DeleteIndex(SizeType p_id) {
-        return ErrorCode::Undefined;
-    }
-
-    virtual bool AllFinished() {
-        return false;
-    }
-    virtual void GetDBStats() {
-        return;
-    }
-    virtual void GetIndexStats(int finishedInsert, bool cost, bool reset) {
-        return;
-    }
-    virtual void ForceCompaction() {
-        return;
-    }
-
-    virtual bool CheckValidPosting(SizeType postingID) = 0;
-    virtual SizeType SearchVector(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, int testNum = 64, SizeType VID = -1) {
-        return -1;
-    }
-    virtual void ForceGC(VectorIndex* p_index) {
-        return;
-    }
-
-    virtual void GetWritePosting(SizeType pid, std::string& posting, bool write = false) {
-        return;
-    }
-
-    virtual bool Initialize() {
-        return false;
-    }
-
-    virtual bool ExitBlockController() {
-        return false;
-    }
-
-    virtual void InitPostingRecord(std::shared_ptr<VectorIndex> p_index) {
-        return;
-    }
-};
 }  // namespace SPTAG::SPANN
 
 #endif  // _SPTAG_SPANN_IEXTRASEARCHER_H_

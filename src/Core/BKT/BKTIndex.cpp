@@ -752,6 +752,24 @@ Index<T>::GetParameter(const char* p_param, const char* p_section) const {
 
     return std::string();
 }
+
+std::uint64_t EstimatedVectorCount(std::uint64_t p_memory, DimensionType p_dimension, VectorValueType p_valuetype, SizeType p_vectorsInBlock, SizeType p_maxmeta, int p_treeNumber, int p_neighborhoodSize) {
+    size_t treeNodeSize = sizeof(SizeType) * 3;
+    std::uint64_t unit = GetValueTypeSize(p_valuetype) * p_dimension + p_maxmeta + sizeof(std::uint64_t) + sizeof(SizeType) * p_neighborhoodSize + 1 + treeNodeSize * p_treeNumber;
+    return ((p_memory / unit) / p_vectorsInBlock) * p_vectorsInBlock;
+}
+
+std::uint64_t EstimatedMemoryUsage(std::uint64_t p_vectorCount, DimensionType p_dimension, VectorValueType p_valuetype, SizeType p_vectorsInBlock, SizeType p_maxmeta, int p_treeNumber, int p_neighborhoodSize) {
+    p_vectorCount = ((p_vectorCount + p_vectorsInBlock - 1) / p_vectorsInBlock) * p_vectorsInBlock;
+    size_t treeNodeSize = sizeof(SizeType) * 3;
+    std::uint64_t ret = GetValueTypeSize(p_valuetype) * p_dimension * p_vectorCount;  // Vector Size
+    ret += p_maxmeta * p_vectorCount;                                                 // MetaData Size
+    ret += sizeof(std::uint64_t) * p_vectorCount;                                     // MetaIndex Size
+    ret += sizeof(SizeType) * p_neighborhoodSize * p_vectorCount;                     // Graph Size
+    ret += p_vectorCount;                                                             // DeletedFlag Size
+    ret += treeNodeSize * p_treeNumber * p_vectorCount;                               // Tree Size
+    return ret;
+}
 }  // namespace SPTAG::BKT
 
 #define DefineVectorValueType(Name, Type) \

@@ -99,8 +99,7 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     m_versionMap.Initialize(m_options.m_vectorSize, m_index->m_iDataBlockSize, m_index->m_iDataCapacity);
     int m_vectorInfoSize = sizeof(T) * m_options.m_dim + sizeof(int) + sizeof(uint8_t);
     LOG(Helper::LogLevel::LL_Info, "Copying data from static to SPDK\n");
-    std::shared_ptr<IExtraSearcher> storeExtraSearcher;
-    storeExtraSearcher.reset(new ExtraStaticSearcher<T>());
+    auto storeExtraSearcher = std::make_shared<ExtraStaticSearcher<T>>();
     if (!storeExtraSearcher->LoadIndex(m_options, m_versionMap)) {
         LOG(Helper::LogLevel::LL_Info, "Initialize Error\n");
         exit(1);
