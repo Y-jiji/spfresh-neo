@@ -36,20 +36,14 @@ target_link_libraries(SPTAGLib PUBLIC
     uring isal isal_crypto numa OpenMP::OpenMP_CXX
 )
 
-file(GLOB SPFRESH_HDR_FILES include/SPFresh/*.h)
-file(GLOB SPFRESH_FILES bin/spfresh.cpp)
-add_executable(spfresh ${SPFRESH_FILES})
-target_compile_definitions(spfresh PRIVATE _exe)
+add_executable(spfresh bin/spfresh.cpp)
 target_link_libraries(spfresh PRIVATE Boost::headers SPTAGLib)
 target_include_directories(spfresh PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-file(GLOB SSDSERVING_HDR_FILES include/SSDServing/*.h)
-file(GLOB SSDSERVING_FILES bin/ssdserving.cpp)
-add_executable(ssdserving ${SSDSERVING_FILES})
-target_compile_definitions(ssdserving PRIVATE _exe)
+add_executable(ssdserving bin/ssdserving.cpp)
 target_link_libraries(ssdserving PRIVATE Boost::headers SPTAGLib)
 target_include_directories(ssdserving PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
