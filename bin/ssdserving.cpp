@@ -9,13 +9,13 @@
 #include "Core/Common.h"
 #include "Core/VectorIndex.h"
 #include "Core/SPANN/Index.h"
-#include "Helper/SimpleIniReader.h"
-#include "Helper/VectorSetReader.h"
 #include "Core/Common/TruthSet.h"
-#include "Utils/DistanceUtils.h"
 #include "Core/Common/QueryResultSet.h"
 #include "Core/SPANN/Index.h"
+#include "Helper/SimpleIniReader.h"
 #include "Helper/VectorSetReader.h"
+#include "Helper/VectorSetReader.h"
+#include "Utils/DistanceUtils.h"
 
 namespace SPTAG::SSDServing {
 

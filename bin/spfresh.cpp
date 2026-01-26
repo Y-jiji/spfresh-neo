@@ -2,30 +2,20 @@
 // Licensed under the MIT License.
 
 #include <iostream>
-
-#include "Core/Common.h"
-#include "Core/VectorIndex.h"
-#include "Core/SPANN/Index.h"
-#include "Helper/SimpleIniReader.h"
-#include "Helper/VectorSetReader.h"
-#include "Helper/StringConvert.h"
-#include "Core/Common/TruthSet.h"
-
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-
-#include "Core/Common.h"
-#include "Core/Common/TruthSet.h"
-#include "Core/SPANN/Index.h"
-#include "Core/VectorIndex.h"
-#include "Helper/SimpleIniReader.h"
-#include "Helper/StringConvert.h"
-#include "Helper/VectorSetReader.h"
 #include <future>
-
 #include <iomanip>
 #include <iostream>
 #include <fstream>
+
+#include "Core/Common.h"
+#include "Core/Common/TruthSet.h"
+#include "Core/Common/TruthSet.h"
+#include "Core/SPANN/Index.h"
+#include "Core/VectorIndex.h"
+#include "Core/VectorIndex.h"
+#include "Core/SPANN/Index.h"
+#include "Helper/VectorSetReader.h"
+#include "Helper/VectorSetReader.h"
 
 namespace SPTAG::SSDServing::SPFresh {
 
