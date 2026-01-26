@@ -9,7 +9,6 @@ namespace SPTAG::SPANN {
 thread_local struct SPDKIO::BlockController::IoContext SPDKIO::BlockController::m_currIoContext;
 int SPDKIO::BlockController::m_ssdInflight = 0;
 int SPDKIO::BlockController::m_ioCompleteCount = 0;
-std::unique_ptr<char[]> SPDKIO::BlockController::m_memBuffer;
 
 void SPDKIO::BlockController::SpdkBdevEventCallback(enum spdk_bdev_event_type type, struct spdk_bdev* bdev, void* event_ctx) {
     fprintf(stderr, "SpdkBdevEventCallback: supported bdev event type %d\n", type);
@@ -131,286 +130,220 @@ bool SPDKIO::BlockController::Initialize(int batchSize) {
     std::lock_guard<std::mutex> lock(m_initMutex);
     m_numInitCalled++;
 
-    const char* useMemImplEnvStr = getenv(kUseMemImplEnv);
-    m_useMemImpl = useMemImplEnvStr && !strcmp(useMemImplEnvStr, "1");
-    const char* useSsdImplEnvStr = getenv(kUseSsdImplEnv);
-    m_useSsdImpl = useSsdImplEnvStr && !strcmp(useSsdImplEnvStr, "1");
-    if (m_useMemImpl) {
-        if (m_numInitCalled == 1) {
-            if (m_memBuffer == nullptr) {
-                m_memBuffer.reset(new char[kMemImplMaxNumBlocks * PageSize]);
-            }
-            for (AddressType i = 0; i < kMemImplMaxNumBlocks; i++) {
-                m_blockAddresses.push(i);
-            }
+    if (m_numInitCalled == 1) {
+        m_batchSize = batchSize;
+        for (AddressType i = 0; i < kMaxNumBlocks; i++) {
+            m_blockAddresses.push(i);
         }
-        return true;
-    } else if (m_useSsdImpl) {
-        if (m_numInitCalled == 1) {
-            m_batchSize = batchSize;
-            for (AddressType i = 0; i < kSsdImplMaxNumBlocks; i++) {
-                m_blockAddresses.push(i);
-            }
-            pthread_create(&m_ssdSpdkTid, NULL, &InitializeSpdk, this);
-            while (!m_ssdSpdkThreadReady && !m_ssdSpdkThreadStartFailed)
-                ;
-            if (m_ssdSpdkThreadStartFailed) {
-                fprintf(stderr, "SPDKIO::BlockController::Initialize failed\n");
-                return false;
-            }
+        pthread_create(&m_ssdSpdkTid, NULL, &InitializeSpdk, this);
+        while (!m_ssdSpdkThreadReady && !m_ssdSpdkThreadStartFailed)
+            ;
+        if (m_ssdSpdkThreadStartFailed) {
+            fprintf(stderr, "SPDKIO::BlockController::Initialize failed\n");
+            return false;
         }
-        // Create sub I/O request pool
-        m_currIoContext.sub_io_requests.resize(m_ssdSpdkIoDepth);
-        m_currIoContext.in_flight = 0;
-        uint32_t buf_align;
-        buf_align = spdk_bdev_get_buf_align(m_ssdSpdkBdev);
-        for (auto& sr : m_currIoContext.sub_io_requests) {
-            sr.completed_sub_io_requests = &(m_currIoContext.completed_sub_io_requests);
-            sr.app_buff = nullptr;
-            sr.dma_buff = spdk_dma_zmalloc(PageSize, buf_align, NULL);
-            sr.ctrl = this;
-            m_currIoContext.free_sub_io_requests.push_back(&sr);
-        }
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::Initialize failed\n");
-        return false;
     }
+    // Create sub I/O request pool
+    m_currIoContext.sub_io_requests.resize(m_ssdSpdkIoDepth);
+    m_currIoContext.in_flight = 0;
+    uint32_t buf_align;
+    buf_align = spdk_bdev_get_buf_align(m_ssdSpdkBdev);
+    for (auto& sr : m_currIoContext.sub_io_requests) {
+        sr.completed_sub_io_requests = &(m_currIoContext.completed_sub_io_requests);
+        sr.app_buff = nullptr;
+        sr.dma_buff = spdk_dma_zmalloc(PageSize, buf_align, NULL);
+        sr.ctrl = this;
+        m_currIoContext.free_sub_io_requests.push_back(&sr);
+    }
+    return true;
 }
 
 // get p_size blocks from front, and fill in p_data array
 bool SPDKIO::BlockController::GetBlocks(AddressType* p_data, int p_size) {
     AddressType currBlockAddress = 0;
-    if (m_useMemImpl || m_useSsdImpl) {
-        for (int i = 0; i < p_size; i++) {
-            while (!m_blockAddresses.try_pop(currBlockAddress))
-                ;
-            p_data[i] = currBlockAddress;
-        }
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::GetBlocks failed\n");
-        return false;
+    for (int i = 0; i < p_size; i++) {
+        while (!m_blockAddresses.try_pop(currBlockAddress))
+            ;
+        p_data[i] = currBlockAddress;
     }
+    return true;
 }
 
 // release p_size blocks, put them at the end of the queue
 bool SPDKIO::BlockController::ReleaseBlocks(AddressType* p_data, int p_size) {
-    if (m_useMemImpl || m_useSsdImpl) {
-        for (int i = 0; i < p_size; i++) {
-            m_blockAddresses.push(p_data[i]);
-        }
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::ReleaseBlocks failed\n");
-        return false;
+    for (int i = 0; i < p_size; i++) {
+        m_blockAddresses.push(p_data[i]);
     }
+    return true;
 }
 
 // read a posting list. p_data[0] is the total data size,
 // p_data[1], p_data[2], ..., p_data[((p_data[0] + PageSize - 1) >> PageSizeEx)] are the addresses of the blocks
 // concat all the block contents together into p_value string.
 bool SPDKIO::BlockController::ReadBlocks(AddressType* p_data, std::string* p_value, const std::chrono::microseconds& timeout) {
-    if (m_useMemImpl) {
-        p_value->resize(p_data[0]);
+    p_value->resize(p_data[0]);
+    AddressType currOffset = 0;
+    AddressType dataIdx = 1;
+    SubIoRequest* currSubIo;
+
+    // Clear timeout I/Os
+    while (m_currIoContext.in_flight) {
+        if (m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
+            currSubIo->app_buff = nullptr;
+            m_currIoContext.free_sub_io_requests.push_back(currSubIo);
+            m_currIoContext.in_flight--;
+        }
+    }
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    // Submit all I/Os
+    while (currOffset < p_data[0] || m_currIoContext.in_flight) {
+        auto t2 = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1) > timeout) {
+            return false;
+        }
+        // Try submit
+        if (currOffset < p_data[0] && m_currIoContext.free_sub_io_requests.size()) {
+            currSubIo = m_currIoContext.free_sub_io_requests.back();
+            m_currIoContext.free_sub_io_requests.pop_back();
+            currSubIo->app_buff = p_value->data() + currOffset;
+            currSubIo->real_size = (p_data[0] - currOffset) < PageSize ? (p_data[0] - currOffset) : PageSize;
+            currSubIo->is_read = true;
+            currSubIo->offset = p_data[dataIdx] * PageSize;
+            m_submittedSubIoRequests.push(currSubIo);
+            currOffset += PageSize;
+            dataIdx++;
+            m_currIoContext.in_flight++;
+        }
+        // Try complete
+        if (m_currIoContext.in_flight && m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
+            memcpy(currSubIo->app_buff, currSubIo->dma_buff, currSubIo->real_size);
+            currSubIo->app_buff = nullptr;
+            m_currIoContext.free_sub_io_requests.push_back(currSubIo);
+            m_currIoContext.in_flight--;
+        }
+    }
+    return true;
+}
+
+// parallel read a list of posting lists.
+bool SPDKIO::BlockController::ReadBlocks(std::vector<AddressType*>& p_data, std::vector<std::string>* p_values, const std::chrono::microseconds& timeout) {
+    // Temporarily disable timeout
+
+    // Convert request format to SubIoRequests
+    auto t1 = std::chrono::high_resolution_clock::now();
+    p_values->resize(p_data.size());
+    std::vector<SubIoRequest> subIoRequests;
+    std::vector<int> subIoRequestCount(p_data.size(), 0);
+    subIoRequests.reserve(256);
+    for (size_t i = 0; i < p_data.size(); i++) {
+        AddressType* p_data_i = p_data[i];
+        std::string* p_value = &((*p_values)[i]);
+
+        p_value->resize(p_data_i[0]);
         AddressType currOffset = 0;
         AddressType dataIdx = 1;
-        while (currOffset < p_data[0]) {
-            AddressType readSize = (p_data[0] - currOffset) < PageSize ? (p_data[0] - currOffset) : PageSize;
-            memcpy(p_value->data() + currOffset, m_memBuffer.get() + p_data[dataIdx] * PageSize, readSize);
+
+        while (currOffset < p_data_i[0]) {
+            SubIoRequest currSubIo;
+            currSubIo.app_buff = p_value->data() + currOffset;
+            currSubIo.real_size = (p_data_i[0] - currOffset) < PageSize ? (p_data_i[0] - currOffset) : PageSize;
+            currSubIo.is_read = true;
+            currSubIo.offset = p_data_i[dataIdx] * PageSize;
+            currSubIo.posting_id = i;
+            subIoRequests.push_back(currSubIo);
+            subIoRequestCount[i]++;
             currOffset += PageSize;
             dataIdx++;
         }
-        return true;
-    } else if (m_useSsdImpl) {
-        p_value->resize(p_data[0]);
-        AddressType currOffset = 0;
-        AddressType dataIdx = 1;
+    }
+
+    // Clear timeout I/Os
+    while (m_currIoContext.in_flight) {
         SubIoRequest* currSubIo;
-
-        // Clear timeout I/Os
-        while (m_currIoContext.in_flight) {
-            if (m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
-                currSubIo->app_buff = nullptr;
-                m_currIoContext.free_sub_io_requests.push_back(currSubIo);
-                m_currIoContext.in_flight--;
-            }
+        if (m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
+            currSubIo->app_buff = nullptr;
+            m_currIoContext.free_sub_io_requests.push_back(currSubIo);
+            m_currIoContext.in_flight--;
         }
+    }
 
-        auto t1 = std::chrono::high_resolution_clock::now();
-        // Submit all I/Os
-        while (currOffset < p_data[0] || m_currIoContext.in_flight) {
+    const int batch_size = m_batchSize;
+    for (int currSubIoStartId = 0; currSubIoStartId < subIoRequests.size(); currSubIoStartId += batch_size) {
+        int currSubIoEndId = (currSubIoStartId + batch_size) > subIoRequests.size() ? subIoRequests.size() : currSubIoStartId + batch_size;
+        int currSubIoIdx = currSubIoStartId;
+        SubIoRequest* currSubIo;
+        while (currSubIoIdx < currSubIoEndId || m_currIoContext.in_flight) {
             auto t2 = std::chrono::high_resolution_clock::now();
             if (std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1) > timeout) {
-                return false;
+                break;
             }
             // Try submit
-            if (currOffset < p_data[0] && m_currIoContext.free_sub_io_requests.size()) {
+            if (currSubIoIdx < currSubIoEndId && m_currIoContext.free_sub_io_requests.size()) {
                 currSubIo = m_currIoContext.free_sub_io_requests.back();
                 m_currIoContext.free_sub_io_requests.pop_back();
-                currSubIo->app_buff = p_value->data() + currOffset;
-                currSubIo->real_size = (p_data[0] - currOffset) < PageSize ? (p_data[0] - currOffset) : PageSize;
+                currSubIo->app_buff = subIoRequests[currSubIoIdx].app_buff;
+                currSubIo->real_size = subIoRequests[currSubIoIdx].real_size;
                 currSubIo->is_read = true;
-                currSubIo->offset = p_data[dataIdx] * PageSize;
+                currSubIo->offset = subIoRequests[currSubIoIdx].offset;
+                currSubIo->posting_id = subIoRequests[currSubIoIdx].posting_id;
                 m_submittedSubIoRequests.push(currSubIo);
-                currOffset += PageSize;
-                dataIdx++;
                 m_currIoContext.in_flight++;
+                currSubIoIdx++;
             }
             // Try complete
             if (m_currIoContext.in_flight && m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
                 memcpy(currSubIo->app_buff, currSubIo->dma_buff, currSubIo->real_size);
                 currSubIo->app_buff = nullptr;
-                m_currIoContext.free_sub_io_requests.push_back(currSubIo);
-                m_currIoContext.in_flight--;
-            }
-        }
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::ReadBlocks single failed\n");
-        return false;
-    }
-}
-
-// parallel read a list of posting lists.
-bool SPDKIO::BlockController::ReadBlocks(std::vector<AddressType*>& p_data, std::vector<std::string>* p_values, const std::chrono::microseconds& timeout) {
-    if (m_useMemImpl) {
-        p_values->resize(p_data.size());
-        for (size_t i = 0; i < p_data.size(); i++) {
-            ReadBlocks(p_data[i], &((*p_values)[i]));
-        }
-        return true;
-    } else if (m_useSsdImpl) {
-        // Temporarily disable timeout
-
-        // Convert request format to SubIoRequests
-        auto t1 = std::chrono::high_resolution_clock::now();
-        p_values->resize(p_data.size());
-        std::vector<SubIoRequest> subIoRequests;
-        std::vector<int> subIoRequestCount(p_data.size(), 0);
-        subIoRequests.reserve(256);
-        for (size_t i = 0; i < p_data.size(); i++) {
-            AddressType* p_data_i = p_data[i];
-            std::string* p_value = &((*p_values)[i]);
-
-            p_value->resize(p_data_i[0]);
-            AddressType currOffset = 0;
-            AddressType dataIdx = 1;
-
-            while (currOffset < p_data_i[0]) {
-                SubIoRequest currSubIo;
-                currSubIo.app_buff = p_value->data() + currOffset;
-                currSubIo.real_size = (p_data_i[0] - currOffset) < PageSize ? (p_data_i[0] - currOffset) : PageSize;
-                currSubIo.is_read = true;
-                currSubIo.offset = p_data_i[dataIdx] * PageSize;
-                currSubIo.posting_id = i;
-                subIoRequests.push_back(currSubIo);
-                subIoRequestCount[i]++;
-                currOffset += PageSize;
-                dataIdx++;
-            }
-        }
-
-        // Clear timeout I/Os
-        while (m_currIoContext.in_flight) {
-            SubIoRequest* currSubIo;
-            if (m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
-                currSubIo->app_buff = nullptr;
+                subIoRequestCount[currSubIo->posting_id]--;
                 m_currIoContext.free_sub_io_requests.push_back(currSubIo);
                 m_currIoContext.in_flight--;
             }
         }
 
-        const int batch_size = m_batchSize;
-        for (int currSubIoStartId = 0; currSubIoStartId < subIoRequests.size(); currSubIoStartId += batch_size) {
-            int currSubIoEndId = (currSubIoStartId + batch_size) > subIoRequests.size() ? subIoRequests.size() : currSubIoStartId + batch_size;
-            int currSubIoIdx = currSubIoStartId;
-            SubIoRequest* currSubIo;
-            while (currSubIoIdx < currSubIoEndId || m_currIoContext.in_flight) {
-                auto t2 = std::chrono::high_resolution_clock::now();
-                if (std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1) > timeout) {
-                    break;
-                }
-                // Try submit
-                if (currSubIoIdx < currSubIoEndId && m_currIoContext.free_sub_io_requests.size()) {
-                    currSubIo = m_currIoContext.free_sub_io_requests.back();
-                    m_currIoContext.free_sub_io_requests.pop_back();
-                    currSubIo->app_buff = subIoRequests[currSubIoIdx].app_buff;
-                    currSubIo->real_size = subIoRequests[currSubIoIdx].real_size;
-                    currSubIo->is_read = true;
-                    currSubIo->offset = subIoRequests[currSubIoIdx].offset;
-                    currSubIo->posting_id = subIoRequests[currSubIoIdx].posting_id;
-                    m_submittedSubIoRequests.push(currSubIo);
-                    m_currIoContext.in_flight++;
-                    currSubIoIdx++;
-                }
-                // Try complete
-                if (m_currIoContext.in_flight && m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
-                    memcpy(currSubIo->app_buff, currSubIo->dma_buff, currSubIo->real_size);
-                    currSubIo->app_buff = nullptr;
-                    subIoRequestCount[currSubIo->posting_id]--;
-                    m_currIoContext.free_sub_io_requests.push_back(currSubIo);
-                    m_currIoContext.in_flight--;
-                }
-            }
-
-            auto t2 = std::chrono::high_resolution_clock::now();
-            if (std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1) > timeout) {
-                break;
-            }
+        auto t2 = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1) > timeout) {
+            break;
         }
-
-        for (int i = 0; i < subIoRequestCount.size(); i++) {
-            if (subIoRequestCount[i] != 0) {
-                (*p_values)[i].clear();
-            }
-        }
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::ReadBlocks batch failed\n");
-        return false;
     }
+
+    for (int i = 0; i < subIoRequestCount.size(); i++) {
+        if (subIoRequestCount[i] != 0) {
+            (*p_values)[i].clear();
+        }
+    }
+    return true;
 }
 
 // write p_value into p_size blocks start from p_data
 bool SPDKIO::BlockController::WriteBlocks(AddressType* p_data, int p_size, const std::string& p_value) {
-    if (m_useMemImpl) {
-        for (int i = 0; i < p_size; i++) {
-            memcpy(m_memBuffer.get() + p_data[i] * PageSize, p_value.data() + i * PageSize, PageSize);
+    AddressType currBlockIdx = 0;
+    int inflight = 0;
+    SubIoRequest* currSubIo;
+    int totalSize = p_value.size();
+    // Submit all I/Os
+    while (currBlockIdx < p_size || inflight) {
+        // Try submit
+        if (currBlockIdx < p_size && m_currIoContext.free_sub_io_requests.size()) {
+            currSubIo = m_currIoContext.free_sub_io_requests.back();
+            m_currIoContext.free_sub_io_requests.pop_back();
+            currSubIo->app_buff = const_cast<char*>(p_value.data()) + currBlockIdx * PageSize;
+            currSubIo->real_size = (PageSize * (currBlockIdx + 1)) > totalSize ? (totalSize - currBlockIdx * PageSize) : PageSize;
+            currSubIo->is_read = false;
+            currSubIo->offset = p_data[currBlockIdx] * PageSize;
+            memcpy(currSubIo->dma_buff, currSubIo->app_buff, currSubIo->real_size);
+            m_submittedSubIoRequests.push(currSubIo);
+            currBlockIdx++;
+            inflight++;
         }
-        return true;
-    } else if (m_useSsdImpl) {
-        AddressType currBlockIdx = 0;
-        int inflight = 0;
-        SubIoRequest* currSubIo;
-        int totalSize = p_value.size();
-        // Submit all I/Os
-        while (currBlockIdx < p_size || inflight) {
-            // Try submit
-            if (currBlockIdx < p_size && m_currIoContext.free_sub_io_requests.size()) {
-                currSubIo = m_currIoContext.free_sub_io_requests.back();
-                m_currIoContext.free_sub_io_requests.pop_back();
-                currSubIo->app_buff = const_cast<char*>(p_value.data()) + currBlockIdx * PageSize;
-                currSubIo->real_size = (PageSize * (currBlockIdx + 1)) > totalSize ? (totalSize - currBlockIdx * PageSize) : PageSize;
-                currSubIo->is_read = false;
-                currSubIo->offset = p_data[currBlockIdx] * PageSize;
-                memcpy(currSubIo->dma_buff, currSubIo->app_buff, currSubIo->real_size);
-                m_submittedSubIoRequests.push(currSubIo);
-                currBlockIdx++;
-                inflight++;
-            }
-            // Try complete
-            if (inflight && m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
-                currSubIo->app_buff = nullptr;
-                m_currIoContext.free_sub_io_requests.push_back(currSubIo);
-                inflight--;
-            }
+        // Try complete
+        if (inflight && m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
+            currSubIo->app_buff = nullptr;
+            m_currIoContext.free_sub_io_requests.push_back(currSubIo);
+            inflight--;
         }
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::ReadBlocks single failed\n");
-        return false;
     }
+    return true;
 }
 
 bool SPDKIO::BlockController::IOStatistics() {
@@ -434,46 +367,33 @@ bool SPDKIO::BlockController::ShutDown() {
     std::lock_guard<std::mutex> lock(m_initMutex);
     m_numInitCalled--;
 
-    if (m_useMemImpl) {
-        if (m_numInitCalled == 0) {
-            while (!m_blockAddresses.empty()) {
-                AddressType currBlockAddress;
-                m_blockAddresses.try_pop(currBlockAddress);
-            }
+    if (m_numInitCalled == 0) {
+        m_ssdSpdkThreadExiting = true;
+        spdk_app_start_shutdown();
+        pthread_join(m_ssdSpdkTid, NULL);
+        while (!m_blockAddresses.empty()) {
+            AddressType currBlockAddress;
+            m_blockAddresses.try_pop(currBlockAddress);
         }
-        return true;
-    } else if (m_useSsdImpl) {
-        if (m_numInitCalled == 0) {
-            m_ssdSpdkThreadExiting = true;
-            spdk_app_start_shutdown();
-            pthread_join(m_ssdSpdkTid, NULL);
-            while (!m_blockAddresses.empty()) {
-                AddressType currBlockAddress;
-                m_blockAddresses.try_pop(currBlockAddress);
-            }
-        }
-
-        SubIoRequest* currSubIo;
-        while (m_currIoContext.in_flight) {
-            if (m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
-                currSubIo->app_buff = nullptr;
-                m_currIoContext.free_sub_io_requests.push_back(currSubIo);
-                m_currIoContext.in_flight--;
-            }
-        }
-        // Free memory buffers
-        for (auto& sr : m_currIoContext.sub_io_requests) {
-            sr.completed_sub_io_requests = nullptr;
-            sr.app_buff = nullptr;
-            spdk_free(sr.dma_buff);
-            sr.dma_buff = nullptr;
-        }
-        m_currIoContext.free_sub_io_requests.clear();
-        return true;
-    } else {
-        fprintf(stderr, "SPDKIO::BlockController::ShutDown failed\n");
-        return false;
     }
+
+    SubIoRequest* currSubIo;
+    while (m_currIoContext.in_flight) {
+        if (m_currIoContext.completed_sub_io_requests.try_pop(currSubIo)) {
+            currSubIo->app_buff = nullptr;
+            m_currIoContext.free_sub_io_requests.push_back(currSubIo);
+            m_currIoContext.in_flight--;
+        }
+    }
+    // Free memory buffers
+    for (auto& sr : m_currIoContext.sub_io_requests) {
+        sr.completed_sub_io_requests = nullptr;
+        sr.app_buff = nullptr;
+        spdk_free(sr.dma_buff);
+        sr.dma_buff = nullptr;
+    }
+    m_currIoContext.free_sub_io_requests.clear();
+    return true;
 }
 
 }  // namespace SPTAG::SPANN

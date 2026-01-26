@@ -69,3 +69,13 @@ target_include_directories(BKTSerializationTest PRIVATE
     $<INSTALL_INTERFACE:include>
 )
 add_test(NAME BKTSerializationTest COMMAND BKTSerializationTest)
+set_tests_properties(BKTSerializationTest PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=/usr/local/lib")
+
+add_executable(ExtraSPDKControllerTest unittest/ExtraSPDKControllerTest.cpp)
+target_link_libraries(ExtraSPDKControllerTest PRIVATE SPTAGLib)
+target_include_directories(ExtraSPDKControllerTest PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+add_test(NAME ExtraSPDKControllerTest COMMAND ExtraSPDKControllerTest)
+set_tests_properties(ExtraSPDKControllerTest PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=/usr/local/lib;SPFRESH_SPDK_CONF=${CMAKE_CURRENT_SOURCE_DIR}/script/bdev-user.json;SPFRESH_SPDK_BDEV=Uring0")

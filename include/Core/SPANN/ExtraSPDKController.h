@@ -27,11 +27,7 @@ typedef std::int64_t AddressType;
 class SPDKIO {
     class BlockController {
        private:
-        static constexpr const char* kUseMemImplEnv = "SPFRESH_SPDK_USE_MEM_IMPL";
-        static constexpr AddressType kMemImplMaxNumBlocks = (1ULL << 30) >> PageSizeEx;  // 1GB
-        static constexpr const char* kUseSsdImplEnv = "SPFRESH_SPDK_USE_SSD_IMPL";
-        // static constexpr AddressType kSsdImplMaxNumBlocks = (1ULL << 40) >> PageSizeEx; // 1T
-        static constexpr AddressType kSsdImplMaxNumBlocks = 1700 * 1024 * 256;  // 1.7T
+        static constexpr AddressType kMaxNumBlocks = 1700 * 1024 * 256;  // 1.7T
         static constexpr const char* kSpdkConfEnv = "SPFRESH_SPDK_CONF";
         static constexpr const char* kSpdkBdevNameEnv = "SPFRESH_SPDK_BDEV";
         static constexpr const char* kSpdkIoDepth = "SPFRESH_SPDK_IO_DEPTH";
@@ -39,7 +35,6 @@ class SPDKIO {
 
         tbb::concurrent_queue<AddressType> m_blockAddresses;
 
-        bool m_useSsdImpl = false;
         const char* m_ssdSpdkBdevName = nullptr;
         pthread_t m_ssdSpdkTid;
         volatile bool m_ssdSpdkThreadStartFailed = false;
@@ -70,9 +65,6 @@ class SPDKIO {
         static thread_local struct IoContext m_currIoContext;
 
         static int m_ssdInflight;
-
-        bool m_useMemImpl = false;
-        static std::unique_ptr<char[]> m_memBuffer;
 
         std::mutex m_initMutex;
         int m_numInitCalled = 0;
