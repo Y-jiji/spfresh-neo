@@ -107,10 +107,6 @@ std::shared_ptr<std::vector<std::uint64_t>> SPTAG::VectorIndex::CalculateBufferS
         ret->push_back(metasize.first);
         ret->push_back(metasize.second);
     }
-
-    if (m_pQuantizer) {
-        ret->push_back(m_pQuantizer->BufferSize());
-    }
     return std::move(ret);
 }
 
@@ -120,11 +116,6 @@ SPTAG::VectorIndex::LoadIndexConfig(SPTAG::Helper::IniReader& p_reader) {
     if (p_reader.DoesSectionExist(metadataSection)) {
         m_metadataManager.SetMetadataFile(p_reader.GetParameter(metadataSection, "MetaDataFilePath", std::string()));
         m_metadataManager.SetMetadataIndexFile(p_reader.GetParameter(metadataSection, "MetaDataIndexPath", std::string()));
-    }
-
-    std::string quantizerSection("Quantizer");
-    if (p_reader.DoesSectionExist(quantizerSection)) {
-        m_metadataManager.SetQuantizerFile(p_reader.GetParameter(quantizerSection, "QuantizerFilePath", std::string()));
     }
     return LoadConfig(p_reader);
 }
@@ -137,12 +128,6 @@ SPTAG::VectorIndex::SaveIndexConfig(std::shared_ptr<SPTAG::Helper::DiskIO> p_con
         IOSTRING(p_configOut, WriteString, ("MetaDataIndexPath=" + m_metadataManager.GetMetadataIndexFile() + "\n").c_str());
         if (m_metadataManager.HasMetaMapping())
             IOSTRING(p_configOut, WriteString, "MetaDataToVectorIndex=true\n");
-        IOSTRING(p_configOut, WriteString, "\n");
-    }
-
-    if (m_pQuantizer) {
-        IOSTRING(p_configOut, WriteString, "[Quantizer]\n");
-        IOSTRING(p_configOut, WriteString, ("QuantizerFilePath=" + m_metadataManager.GetQuantizerFile() + "\n").c_str());
         IOSTRING(p_configOut, WriteString, "\n");
     }
 
@@ -207,12 +192,6 @@ SPTAG::VectorIndex::SaveIndex(std::string& p_config, const std::vector<SPTAG::By
         if (SPTAG::ErrorCode::Success == ret)
             ret = SaveIndexData(p_indexStreams);
     }
-    if (m_pMetadata != nullptr)
-        metaStart += 2;
-
-    if (SPTAG::ErrorCode::Success == ret && m_pQuantizer && p_indexStreams.size() > metaStart) {
-        ret = m_pQuantizer->SaveQuantizer(p_indexStreams[metaStart]);
-    }
     return ret;
 }
 
@@ -261,9 +240,6 @@ SPTAG::VectorIndex::SaveIndex(const std::string& p_folderPath) {
         indexfiles->push_back(m_metadataManager.GetMetadataFile());
         indexfiles->push_back(m_metadataManager.GetMetadataIndexFile());
     }
-    if (m_pQuantizer) {
-        indexfiles->push_back(m_metadataManager.GetQuantizerFile());
-    }
     std::vector<std::shared_ptr<SPTAG::Helper::DiskIO>> handles;
     for (std::string& f : *indexfiles) {
         std::string newfile = folderPath + f;
@@ -284,12 +260,6 @@ SPTAG::VectorIndex::SaveIndex(const std::string& p_folderPath) {
             ret = m_pMetadata->SaveMetadata(handles[metaStart], handles[metaStart + 1]);
         if (SPTAG::ErrorCode::Success == ret)
             ret = SaveIndexData(handles);
-    }
-    if (m_pMetadata != nullptr)
-        metaStart += 2;
-
-    if (SPTAG::ErrorCode::Success == ret && m_pQuantizer) {
-        ret = m_pQuantizer->SaveQuantizer(handles[metaStart]);
     }
     return ret;
 }
@@ -335,9 +305,6 @@ SPTAG::VectorIndex::SaveIndexToFile(const std::string& p_file, SPTAG::IAbortOper
             if (SPTAG::ErrorCode::Success == ret && m_pMetadata != nullptr)
                 ret = m_pMetadata->SaveMetadata(fp, fp);
         }
-        if (SPTAG::ErrorCode::Success == ret && m_pQuantizer) {
-            ret = m_pQuantizer->SaveQuantizer(fp);
-        }
     }
     fp->ShutDown();
 
@@ -350,9 +317,7 @@ SPTAG::ErrorCode
 SPTAG::VectorIndex::BuildIndex(std::shared_ptr<SPTAG::VectorSet> p_vectorSet, std::shared_ptr<SPTAG::MetadataSet> p_metadataSet, bool p_withMetaIndex, bool p_normalized, bool p_shareOwnership) {
     LOG(SPTAG::Helper::LogLevel::LL_Info, "Begin build index...\n");
 
-    bool valueMatches = p_vectorSet->GetValueType() == GetVectorValueType();
-    bool quantizerMatches = ((bool)m_pQuantizer) && (p_vectorSet->GetValueType() == SPTAG::VectorValueType::UInt8);
-    if (nullptr == p_vectorSet || !(valueMatches || quantizerMatches)) {
+    if (nullptr == p_vectorSet || p_vectorSet->GetValueType() != GetVectorValueType()) {
         return SPTAG::ErrorCode::Fail;
     }
     m_pMetadata = std::move(p_metadataSet);
@@ -448,21 +413,6 @@ const void* SPTAG::VectorIndex::GetSample(SPTAG::ByteArray p_meta, bool& deleteF
 }
 
 SPTAG::ErrorCode
-SPTAG::VectorIndex::LoadQuantizer(std::string p_quantizerFile) {
-    auto ptr = SPTAG::f_createIO();
-    if (!ptr->Initialize(p_quantizerFile.c_str(), std::ios::binary | std::ios::in)) {
-        LOG(SPTAG::Helper::LogLevel::LL_Error, "Failed to read quantizer file.\n");
-        return SPTAG::ErrorCode::FailedOpenFile;
-    }
-    SetQuantizer(SPTAG::COMMON::IQuantizer::LoadIQuantizer(ptr));
-    if (!m_pQuantizer) {
-        LOG(SPTAG::Helper::LogLevel::LL_Error, "Failed to load quantizer.\n");
-        return SPTAG::ErrorCode::FailedParseValue;
-    }
-    return SPTAG::ErrorCode::Success;
-}
-
-SPTAG::ErrorCode
 SPTAG::VectorIndex::LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<SPTAG::VectorIndex>& p_vectorIndex) {
     std::string folderPath(p_loaderFilePath);
     if (!folderPath.empty() && *(folderPath.rbegin()) != FolderSep)
@@ -523,9 +473,6 @@ SPTAG::VectorIndex::LoadIndex(const std::string& p_loaderFilePath, std::shared_p
         indexfiles->push_back(p_vectorIndex->m_metadataManager.GetMetadataFile());
         indexfiles->push_back(p_vectorIndex->m_metadataManager.GetMetadataIndexFile());
     }
-    if (iniReader.DoesSectionExist("Quantizer")) {
-        indexfiles->push_back(p_vectorIndex->m_metadataManager.GetQuantizerFile());
-    }
     std::vector<std::shared_ptr<SPTAG::Helper::DiskIO>> handles;
     for (std::string& f : *indexfiles) {
         auto ptr = SPTAG::f_createIO();
@@ -551,12 +498,6 @@ SPTAG::VectorIndex::LoadIndex(const std::string& p_loaderFilePath, std::shared_p
         if (iniReader.GetParameter("MetaData", "MetaDataToVectorIndex", std::string()) == "true") {
             p_vectorIndex->BuildMetaMapping();
         }
-        metaStart += 2;
-    }
-    if (iniReader.DoesSectionExist("Quantizer")) {
-        p_vectorIndex->SetQuantizer(SPTAG::COMMON::IQuantizer::LoadIQuantizer(handles[metaStart]));
-        if (!p_vectorIndex->m_pQuantizer)
-            return SPTAG::ErrorCode::FailedParseValue;
     }
     p_vectorIndex->m_bReady = true;
     return SPTAG::ErrorCode::Success;
@@ -645,12 +586,6 @@ SPTAG::VectorIndex::LoadIndexFromFile(const std::string& p_file, std::shared_ptr
         }
     }
 
-    if (iniReader.DoesSectionExist("Quantizer")) {
-        p_vectorIndex->SetQuantizer(SPTAG::COMMON::IQuantizer::LoadIQuantizer(fp));
-        if (!p_vectorIndex->m_pQuantizer)
-            return SPTAG::ErrorCode::FailedParseValue;
-    }
-
     p_vectorIndex->m_bReady = true;
     return SPTAG::ErrorCode::Success;
 }
@@ -703,12 +638,6 @@ SPTAG::VectorIndex::LoadIndex(const std::string& p_config, const std::vector<SPT
         return SPTAG::ErrorCode::FailedParseValue;
 
     SPTAG::ErrorCode ret = SPTAG::ErrorCode::Success;
-    if (!iniReader.GetParameter<std::string>("Base", "QuantizerFilePath", std::string()).empty()) {
-        p_vectorIndex->SetQuantizer(SPTAG::COMMON::IQuantizer::LoadIQuantizer(p_indexBlobs[4]));
-        if (!p_vectorIndex->m_pQuantizer)
-            return SPTAG::ErrorCode::FailedParseValue;
-    }
-
     if ((p_vectorIndex->LoadIndexConfig(iniReader)) != SPTAG::ErrorCode::Success)
         return ret;
 
@@ -728,7 +657,6 @@ SPTAG::VectorIndex::LoadIndex(const std::string& p_config, const std::vector<SPT
         if (iniReader.GetParameter("MetaData", "MetaDataToVectorIndex", std::string()) == "true") {
             p_vectorIndex->BuildMetaMapping();
         }
-        metaStart += 2;
     }
 
     p_vectorIndex->m_bReady = true;
@@ -777,9 +705,7 @@ void SPTAG::VectorIndex::ApproximateRNG(std::shared_ptr<SPTAG::VectorSet>& fullV
 
     int metric = (GetDistCalcMethod() == SPTAG::DistCalcMethod::Cosine);
 
-    if (m_pQuantizer) {
-        getTailNeighborsTPT<uint8_t, float>((uint8_t*)fullVectors->GetData(), fullVectors->Count(), this, exceptIDS, fullVectors->Dimension(), replicaCount, numThreads, numTrees, leafSize, metric, numGPUs, selections);
-    } else if (GetVectorValueType() != SPTAG::VectorValueType::Float) {
+    if (GetVectorValueType() != SPTAG::VectorValueType::Float) {
         typedef int32_t SUMTYPE;
         switch (GetVectorValueType()) {
     #define DefineVectorValueType(Name, Type)                                                                                                                                                                              \
@@ -827,23 +753,7 @@ void SPTAG::VectorIndex::ApproximateRNG(std::shared_ptr<SPTAG::VectorSet>& fullV
                     continue;
                 }
 
-                void* reconstructed_vector = nullptr;
-                if (m_pQuantizer) {
-                    reconstructed_vector = ALIGN_ALLOC(m_pQuantizer->ReconstructSize());
-                    m_pQuantizer->ReconstructVector((const uint8_t*)fullVectors->GetVector(fullID), reconstructed_vector);
-                    switch (m_pQuantizer->GetReconstructType()) {
-    #define DefineVectorValueType(Name, Type)                                                                                             \
-        case SPTAG::VectorValueType::Name:                                                                                                \
-            (*((SPTAG::COMMON::QueryResultSet<Type>*)&resultSet)).SetTarget(reinterpret_cast<Type*>(reconstructed_vector), m_pQuantizer); \
-            break;
-    #include "Core/DefinitionList.h"
-    #undef DefineVectorValueType
-                        default:
-                            LOG(SPTAG::Helper::LogLevel::LL_Error, "Unable to get quantizer reconstruct type");
-                    }
-                } else {
-                    resultSet.SetTarget(fullVectors->GetVector(fullID));
-                }
+                resultSet.SetTarget(fullVectors->GetVector(fullID));
                 resultSet.Reset();
 
                 SearchIndex(resultSet);
@@ -876,10 +786,6 @@ void SPTAG::VectorIndex::ApproximateRNG(std::shared_ptr<SPTAG::VectorSet>& fullV
                     selections[selectionOffset + currReplicaCount].node = queryResults[i].VID;
                     selections[selectionOffset + currReplicaCount].distance = queryResults[i].Dist;
                     ++currReplicaCount;
-                }
-
-                if (reconstructed_vector) {
-                    ALIGN_FREE(reconstructed_vector);
                 }
             }
             rngFailedCountTotal += rngFailedCount;

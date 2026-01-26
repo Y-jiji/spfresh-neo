@@ -7,7 +7,7 @@
 typedef typename SPTAG::Helper::Concurrent::ConcurrentMap<std::string, SPTAG::SizeType> MetadataMap;
 
 SPTAG::MetaDataManager::MetaDataManager()
-    : m_sIndexName(""), m_sMetadataFile("metadata.bin"), m_sMetadataIndexFile("metadataIndex.bin"), m_sQuantizerFile("quantizer.bin"), m_pMetaToVec(nullptr) {
+    : m_sIndexName(""), m_sMetadataFile("metadata.bin"), m_sMetadataIndexFile("metadataIndex.bin"), m_pMetaToVec(nullptr) {
 }
 
 SPTAG::MetaDataManager::~MetaDataManager() {
@@ -40,15 +40,6 @@ SPTAG::MetaDataManager::GetMetadataIndexFile() const {
 
 void SPTAG::MetaDataManager::SetMetadataIndexFile(const std::string& p_file) {
     m_sMetadataIndexFile = p_file;
-}
-
-std::string
-SPTAG::MetaDataManager::GetQuantizerFile() const {
-    return m_sQuantizerFile;
-}
-
-void SPTAG::MetaDataManager::SetQuantizerFile(const std::string& p_file) {
-    m_sQuantizerFile = p_file;
 }
 
 bool SPTAG::MetaDataManager::HasMetaMapping() const {

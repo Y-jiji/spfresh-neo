@@ -46,15 +46,9 @@ struct KmeansArgs {
     float* weightedCounts;
     float* newWeightedCounts;
     std::function<float(const T*, const T*, DimensionType)> fComputeDistance;
-    const std::shared_ptr<IQuantizer>& m_pQuantizer;
 
-    KmeansArgs(int k, DimensionType dim, SizeType datasize, int threadnum, DistCalcMethod distMethod, const std::shared_ptr<IQuantizer>& quantizer = nullptr) : _K(k), _DK(k), _D(dim), _RD(dim), _T(threadnum), _M(distMethod), m_pQuantizer(quantizer) {
-        if (m_pQuantizer) {
-            _RD = m_pQuantizer->ReconstructDim();
-            fComputeDistance = m_pQuantizer->DistanceCalcSelector<T>(distMethod);
-        } else {
-            fComputeDistance = COMMON::DistanceCalcSelector<T>(distMethod);
-        }
+    KmeansArgs(int k, DimensionType dim, SizeType datasize, int threadnum, DistCalcMethod distMethod) : _K(k), _DK(k), _D(dim), _RD(dim), _T(threadnum), _M(distMethod) {
+        fComputeDistance = COMMON::DistanceCalcSelector<T>(distMethod);
 
         centers = (T*)ALIGN_ALLOC(sizeof(T) * _K * _D);
         newTCenters = (T*)ALIGN_ALLOC(sizeof(T) * _K * _D);
@@ -176,14 +170,8 @@ float RefineCenters(const Dataset<T>& data, KmeansArgs<T>& args) {
                 COMMON::Utils::Normalize(currCenters, args._RD, COMMON::Utils::GetBase<T>());
             }
 
-            if (args.m_pQuantizer) {
-                for (DimensionType j = 0; j < args._RD; j++)
-                    reconstructVector[j] = (R)(currCenters[j]);
-                args.m_pQuantizer->QuantizeVector(reconstructVector.data(), (uint8_t*)TCenter);
-            } else {
-                for (DimensionType j = 0; j < args._D; j++)
-                    TCenter[j] = (T)(currCenters[j]);
-            }
+            for (DimensionType j = 0; j < args._D; j++)
+                TCenter[j] = (T)(currCenters[j]);
         }
         diff += DistanceUtils::ComputeDistance(TCenter, args.centers + k * args._D, args._D, DistCalcMethod::L2);
     }
@@ -220,9 +208,6 @@ inline float KmeansAssign(const Dataset<T>& data, std::vector<SizeType>& indices
         float* iclusterDist = args.clusterDist + tid * args._K;
         float* iweightedCounts = args.newWeightedCounts + tid * args._K;
         float idist = 0;
-        R* reconstructVector = nullptr;
-        if (args.m_pQuantizer)
-            reconstructVector = (R*)ALIGN_ALLOC(args.m_pQuantizer->ReconstructSize());
 
         for (SizeType i = istart; i < iend; i++) {
             int clusterid = 0;
@@ -239,14 +224,9 @@ inline float KmeansAssign(const Dataset<T>& data, std::vector<SizeType>& indices
             iweightedCounts[clusterid] += smallestDist;
             idist += smallestDist;
             if (updateCenters) {
-                if (args.m_pQuantizer) {
-                    args.m_pQuantizer->ReconstructVector((const uint8_t*)data[indices[i]], reconstructVector);
-                } else {
-                    reconstructVector = (R*)data[indices[i]];
-                }
                 float* center = inewCenters + clusterid * args._RD;
                 for (DimensionType j = 0; j < args._RD; j++)
-                    center[j] += reconstructVector[j];
+                    center[j] += ((R*)data[indices[i]])[j];
 
                 if (smallestDist > iclusterDist[clusterid]) {
                     iclusterDist[clusterid] = smallestDist;
@@ -259,8 +239,6 @@ inline float KmeansAssign(const Dataset<T>& data, std::vector<SizeType>& indices
                 }
             }
         }
-        if (args.m_pQuantizer)
-            ALIGN_FREE(reconstructVector);
         currDist += idist;
     }
 
@@ -404,23 +382,7 @@ template <typename T>
 float DynamicFactorSelect(const Dataset<T>& data, std::vector<SizeType>& indices, const SizeType first, const SizeType last, KmeansArgs<T>& args, int samples = 1000) {
     float bestLambdaFactor = 100.0f, bestCountStd = (std::numeric_limits<float>::max)();
     for (float lambdaFactor = 0.001f; lambdaFactor <= 1000.0f + 1e-3; lambdaFactor *= 10) {
-        float CountStd = (std::numeric_limits<float>::max)();
-        if (args.m_pQuantizer) {
-            switch (args.m_pQuantizer->GetReconstructType()) {
-#define DefineVectorValueType(Name, Type)                                                                 \
-    case VectorValueType::Name:                                                                           \
-        CountStd = TryClustering<T, Type>(data, indices, first, last, args, samples, lambdaFactor, true); \
-        break;
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-                default:
-                    break;
-            }
-        } else {
-            CountStd = TryClustering<T, T>(data, indices, first, last, args, samples, lambdaFactor, true);
-        }
+        float CountStd = TryClustering<T, T>(data, indices, first, last, args, samples, lambdaFactor, true);
 
         if (CountStd < bestCountStd) {
             bestLambdaFactor = lambdaFactor;
@@ -447,22 +409,7 @@ float DynamicFactorSelect(const Dataset<T>& data, std::vector<SizeType>& indices
 
 template <typename T>
 int KmeansClustering(const Dataset<T>& data, std::vector<SizeType>& indices, const SizeType first, const SizeType last, KmeansArgs<T>& args, int samples = 1000, float lambdaFactor = 100.0f, bool debug = false, IAbortOperation* abort = nullptr, bool virtualCenter = false) {
-    if (args.m_pQuantizer) {
-        switch (args.m_pQuantizer->GetReconstructType()) {
-#define DefineVectorValueType(Name, Type)                                                                             \
-    case VectorValueType::Name:                                                                                       \
-        TryClustering<T, Type>(data, indices, first, last, args, samples, lambdaFactor, debug, abort, virtualCenter); \
-        break;
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-            default:
-                break;
-        }
-    } else {
-        TryClustering<T, T>(data, indices, first, last, args, samples, lambdaFactor, debug, abort, virtualCenter);
-    }
+    TryClustering<T, T>(data, indices, first, last, args, samples, lambdaFactor, debug, abort, virtualCenter);
 
     if (abort && abort->ShouldAbort())
         return 1;
@@ -481,15 +428,14 @@ int KmeansClustering(const Dataset<T>& data, std::vector<SizeType>& indices, con
 
 class BKTree {
    public:
-    BKTree() : m_iTreeNumber(1), m_iBKTKmeansK(32), m_iBKTLeafSize(8), m_iSamples(1000), m_fBalanceFactor(-1.0f), m_bfs(0), m_lock(new std::shared_timed_mutex), m_pQuantizer(nullptr) {}
+    BKTree() : m_iTreeNumber(1), m_iBKTKmeansK(32), m_iBKTLeafSize(8), m_iSamples(1000), m_fBalanceFactor(-1.0f), m_bfs(0), m_lock(new std::shared_timed_mutex) {}
 
     BKTree(const BKTree& other) : m_iTreeNumber(other.m_iTreeNumber),
                                   m_iBKTKmeansK(other.m_iBKTKmeansK),
                                   m_iBKTLeafSize(other.m_iBKTLeafSize),
                                   m_iSamples(other.m_iSamples),
                                   m_fBalanceFactor(other.m_fBalanceFactor),
-                                  m_lock(new std::shared_timed_mutex),
-                                  m_pQuantizer(other.m_pQuantizer) {}
+                                  m_lock(new std::shared_timed_mutex) {}
     ~BKTree() {}
 
     inline const BKTNode& operator[](SizeType index) const {
@@ -540,7 +486,7 @@ class BKTree {
         } else {
             localindices.assign(indices->begin(), indices->end());
         }
-        KmeansArgs<T> args(m_iBKTKmeansK, data.C(), (SizeType)localindices.size(), numOfThreads, distMethod, m_pQuantizer);
+        KmeansArgs<T> args(m_iBKTKmeansK, data.C(), (SizeType)localindices.size(), numOfThreads, distMethod);
 
         if (m_fBalanceFactor < 0)
             m_fBalanceFactor = DynamicFactorSelect(data, localindices, 0, (SizeType)localindices.size(), args, m_iSamples);
@@ -677,7 +623,7 @@ class BKTree {
         for (char i = 0; i < m_iTreeNumber; i++) {
             const BKTNode& node = m_pTreeRoots[m_pTreeStart[i]];
             if (node.childStart < 0) {
-                p_space.m_SPTQueue.insert(NodeDistPair(m_pTreeStart[i], fComputeDistance(p_query.GetQuantizedTarget(), data[node.centerid], data.C())));
+                p_space.m_SPTQueue.insert(NodeDistPair(m_pTreeStart[i], fComputeDistance(p_query.GetTarget(), data[node.centerid], data.C())));
             } else if (m_bfs) {
                 float FactorQ = 1.1f;
                 int MaxBFSNodes = 100;
@@ -688,7 +634,7 @@ class BKTree {
                 p_curr->Top().distance = 1e9;
                 for (SizeType begin = node.childStart; begin < node.childEnd; begin++) {
                     SizeType index = m_pTreeRoots[begin].centerid;
-                    float dist = fComputeDistance(p_query.GetQuantizedTarget(), data[index], data.C());
+                    float dist = fComputeDistance(p_query.GetTarget(), data[index], data.C());
                     if (dist <= FactorQ * p_curr->Top().distance && p_curr->size() < MaxBFSNodes) {
                         p_curr->insert(NodeDistPair(begin, dist));
                     } else {
@@ -709,7 +655,7 @@ class BKTree {
                             }
                             for (SizeType begin = tnode.childStart; begin < tnode.childEnd; begin++) {
                                 SizeType index = m_pTreeRoots[begin].centerid;
-                                float dist = fComputeDistance(p_query.GetQuantizedTarget(), data[index], data.C());
+                                float dist = fComputeDistance(p_query.GetTarget(), data[index], data.C());
                                 if (dist <= FactorQ * p_next->Top().distance && p_next->size() < MaxBFSNodes) {
                                     p_next->insert(NodeDistPair(begin, dist));
                                 } else {
@@ -727,7 +673,7 @@ class BKTree {
             } else {
                 for (SizeType begin = node.childStart; begin < node.childEnd; begin++) {
                     SizeType index = m_pTreeRoots[begin].centerid;
-                    p_space.m_SPTQueue.insert(NodeDistPair(begin, fComputeDistance(p_query.GetQuantizedTarget(), data[index], data.C())));
+                    p_space.m_SPTQueue.insert(NodeDistPair(begin, fComputeDistance(p_query.GetTarget(), data[index], data.C())));
                 }
             }
         }
@@ -751,7 +697,7 @@ class BKTree {
                 }
                 for (SizeType begin = tnode.childStart; begin < tnode.childEnd; begin++) {
                     SizeType index = m_pTreeRoots[begin].centerid;
-                    p_space.m_SPTQueue.insert(NodeDistPair(begin, fComputeDistance(p_query.GetQuantizedTarget(), data[index], data.C())));
+                    p_space.m_SPTQueue.insert(NodeDistPair(begin, fComputeDistance(p_query.GetTarget(), data[index], data.C())));
                 }
             }
         }
@@ -766,7 +712,6 @@ class BKTree {
     std::unique_ptr<std::shared_timed_mutex> m_lock;
     int m_iTreeNumber, m_iBKTKmeansK, m_iBKTLeafSize, m_iSamples, m_bfs;
     float m_fBalanceFactor;
-    std::shared_ptr<SPTAG::COMMON::IQuantizer> m_pQuantizer;
 };
 }  // namespace SPTAG::COMMON
 #endif

@@ -117,22 +117,7 @@ class NeighborhoodGraph {
 #else
     template <typename T>
     void PartitionByTptree(VectorIndex* index, std::vector<SizeType>& indices, const SizeType first, const SizeType last, std::vector<std::pair<SizeType, SizeType> >& leaves) {
-        if (index->m_pQuantizer) {
-            switch (index->m_pQuantizer->GetReconstructType()) {
-    #define DefineVectorValueType(Name, Type)                                    \
-        case VectorValueType::Name:                                              \
-            PartitionByTptreeCore<T, Type>(index, indices, first, last, leaves); \
-            break;
-
-    #include "Core/DefinitionList.h"
-    #undef DefineVectorValueType
-
-                default:
-                    break;
-            }
-        } else {
-            PartitionByTptreeCore<T, T>(index, indices, first, last, leaves);
-        }
+        PartitionByTptreeCore<T, T>(index, indices, first, last, leaves);
     }
 
     template <typename T, typename R>
@@ -145,21 +130,13 @@ class NeighborhoodGraph {
                 int iIteration = 100;
                 SizeType end = min(first + m_iSamples, last);
                 SizeType count = end - first + 1;
-                bool quantizer_exists = (bool)index->m_pQuantizer;
 
                 SizeType cols = index->GetFeatureDim();
-                std::shared_ptr<VectorSet> indices_vectors;
-                if (quantizer_exists) {
-                    cols = index->m_pQuantizer->ReconstructDim();
-                    indices_vectors.reset(new BasicVectorSet(ByteArray::Alloc(sizeof(R) * cols * count), GetEnumValueType<R>(), cols, count));
-                    for (int i = 0; i < count; i++)
-                        index->m_pQuantizer->ReconstructVector((uint8_t*)index->GetSample(indices[first + i]), indices_vectors->GetVector(i));
-                }
 
                 std::vector<float> Mean(cols, 0);
                 // calculate the mean of each dimension
                 for (SizeType j = first; j <= end; j++) {
-                    R* v = (quantizer_exists) ? (R*)indices_vectors->GetVector(j - first) : (R*)index->GetSample(indices[j]);
+                    R* v = (R*)index->GetSample(indices[j]);
                     for (DimensionType k = 0; k < cols; k++) {
                         Mean[k] += v[k];
                     }
@@ -174,7 +151,7 @@ class NeighborhoodGraph {
 
                 // calculate the variance of each dimension
                 for (SizeType j = first; j <= end; j++) {
-                    R* v = (quantizer_exists) ? (R*)indices_vectors->GetVector(j - first) : (R*)index->GetSample(indices[j]);
+                    R* v = (R*)index->GetSample(indices[j]);
                     for (DimensionType k = 0; k < cols; k++) {
                         float dist = v[k] - Mean[k];
                         Variance[k].Dist += dist * dist;
@@ -206,7 +183,7 @@ class NeighborhoodGraph {
                     float mean = 0;
                     for (SizeType j = 0; j < count; j++) {
                         Val[j] = 0;
-                        R* v = (quantizer_exists) ? (R*)indices_vectors->GetVector(j) : (R*)index->GetSample(indices[first + j]);
+                        R* v = (R*)index->GetSample(indices[first + j]);
                         for (int k = 0; k < m_numTopDimensionTPTSplit; k++) {
                             Val[j] += weight[k] * v[indexs[k]];
                         }
@@ -231,7 +208,7 @@ class NeighborhoodGraph {
                 // decide which child one point belongs
                 while (i <= j) {
                     float val = 0;
-                    R* v = (quantizer_exists) ? (R*)indices_vectors->GetVector(i - first) : (R*)index->GetSample(indices[i]);
+                    R* v = (R*)index->GetSample(indices[i]);
                     for (int k = 0; k < m_numTopDimensionTPTSplit; k++) {
                         val += bestweight[k] * v[indexs[k]];
                     }
@@ -489,17 +466,8 @@ class NeighborhoodGraph {
     template <typename T>
     void RefineNode(VectorIndex* index, const SizeType node, bool updateNeighbors, bool searchDeleted, int CEF) {
         COMMON::QueryResultSet<T> query((const T*)index->GetSample(node), CEF + 1);
-        void* rec_query = nullptr;
-        if (index->m_pQuantizer) {
-            rec_query = ALIGN_ALLOC(index->m_pQuantizer->ReconstructSize());
-            index->m_pQuantizer->ReconstructVector((const uint8_t*)query.GetTarget(), rec_query);
-            query.SetTarget((T*)rec_query, index->m_pQuantizer);
-        }
         index->RefineSearchIndex(query, searchDeleted);
         RebuildNeighbors(index, node, m_pNeighborhoodGraph[node], query.GetResults(), CEF + 1);
-        if (rec_query) {
-            ALIGN_FREE(rec_query);
-        }
         if (updateNeighbors) {
             // update neighbors
             for (int j = 0; j <= CEF; j++) {

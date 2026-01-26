@@ -39,14 +39,6 @@ DefineVectorValueType(Int8, std::int8_t)
 
 #endif  // DefineDistCalcMethod
 
-#ifdef DefineQuantizerType
-
-                                                                                            DefineQuantizerType(None, std::shared_ptr<void>)
-                                                                                                DefineQuantizerType(PQQuantizer, std::shared_ptr<SPTAG::COMMON::PQQuantizer>)
-                                                                                                    DefineQuantizerType(OPQQuantizer, std::shared_ptr<SPTAG::COMMON::OPQQuantizer>)
-
-#endif  // DefineQuantizerType
-
 #ifdef DefineErrorCode
 
     // 0x0000 ~ 0x0FFF  General Status
@@ -88,17 +80,6 @@ DefineVectorValueType(Int8, std::int8_t)
                 DefineIndexAlgo(SPANN)
 
 #endif  // DefineIndexAlgo
-
-// target vectors and queries
-#ifdef DefineVectorFileType
-
-    // number of vectors(int32_t), dimension(int32_t)
-    // 1st vector
-    // 2nd vector
-    // ..
-    DefineVectorFileType(DEFAULT)
-
-#endif  // DefineVectorFileType
 
 #ifdef DefineTruthFileType
 

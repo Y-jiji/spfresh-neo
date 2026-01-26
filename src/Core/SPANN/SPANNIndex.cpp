@@ -29,25 +29,9 @@ bool Index<T>::CheckHeadIndexType() {
         LOG(Helper::LogLevel::LL_Error, "Head index and vectors don't have the same value types, which are %s %s\n",
             SPTAG::Helper::Convert::ConvertToString(v1).c_str(),
             SPTAG::Helper::Convert::ConvertToString(v2).c_str());
-        if (!m_pQuantizer)
-            return false;
+        return false;
     }
     return true;
-}
-
-template <typename T>
-void Index<T>::SetQuantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer) {
-    m_pQuantizer = quantizer;
-    if (m_pQuantizer) {
-        m_fComputeDistance = m_pQuantizer->DistanceCalcSelector<T>(m_options.m_distCalcMethod);
-        m_iBaseSquare = (m_options.m_distCalcMethod == DistCalcMethod::Cosine) ? m_pQuantizer->GetBase() * m_pQuantizer->GetBase() : 1;
-    } else {
-        m_fComputeDistance = COMMON::DistanceCalcSelector<T>(m_options.m_distCalcMethod);
-        m_iBaseSquare = (m_options.m_distCalcMethod == DistCalcMethod::Cosine) ? COMMON::Utils::GetBase<std::uint8_t>() * COMMON::Utils::GetBase<std::uint8_t>() : 1;
-    }
-    if (m_index) {
-        m_index->SetQuantizer(quantizer);
-    }
 }
 
 template <typename T>
@@ -62,16 +46,11 @@ ErrorCode Index<T>::LoadConfig(Helper::IniReader& p_reader) {
         }
     }
 
-    if (m_pQuantizer) {
-        m_pQuantizer->SetEnableADC(m_options.m_enableADC);
-    }
-
     return ErrorCode::Success;
 }
 
 template <typename T>
 ErrorCode Index<T>::LoadIndexDataFromMemory(const std::vector<ByteArray>& p_indexBlobs) {
-    m_index->SetQuantizer(m_pQuantizer);
     if (m_index->LoadIndexDataFromMemory(p_indexBlobs) != ErrorCode::Success)
         return ErrorCode::Fail;
 
@@ -81,11 +60,7 @@ ErrorCode Index<T>::LoadIndexDataFromMemory(const std::vector<ByteArray>& p_inde
     m_index->UpdateIndex();
     m_index->SetReady(true);
 
-    if (m_pQuantizer) {
-        m_extraSearcher.reset(new ExtraStaticSearcher<std::uint8_t>());
-    } else {
-        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
-    }
+    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
 
     if (!m_extraSearcher->LoadIndex(m_options, m_versionMap))
         return ErrorCode::Fail;
@@ -99,7 +74,6 @@ ErrorCode Index<T>::LoadIndexDataFromMemory(const std::vector<ByteArray>& p_inde
 
 template <typename T>
 ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams) {
-    m_index->SetQuantizer(m_pQuantizer);
     if (m_index->LoadIndexData(p_indexStreams) != ErrorCode::Success)
         return ErrorCode::Fail;
 
@@ -109,13 +83,7 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     m_index->UpdateIndex();
     m_index->SetReady(true);
 
-    // TODO: Choose an extra searcher based on config
-    // Not Ready
-    if (m_pQuantizer) {
-        m_extraSearcher.reset(new ExtraStaticSearcher<std::uint8_t>());
-    } else {
-        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
-    }
+    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
 
     if (!m_extraSearcher->LoadIndex(m_options, m_versionMap))
         return ErrorCode::Fail;
@@ -197,7 +165,7 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     }
 
     if (m_options.m_preReassign) {
-        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(m_options.m_valueType, m_options.m_dim, m_options.m_vectorType, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads));
+        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(m_options.m_valueType, m_options.m_dim, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads));
         auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
         if (m_options.m_vectorPath.empty()) {
             LOG(Helper::LogLevel::LL_Info, "Vector file is empty. Skipping loading.\n");
@@ -703,11 +671,7 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
     if (m_options.m_selectHead) {
         omp_set_num_threads(m_options.m_iSelectHeadNumberOfThreads);
         bool success = false;
-        if (m_pQuantizer) {
-            success = SelectHeadInternal<std::uint8_t>(p_reader);
-        } else {
-            success = SelectHeadInternal<T>(p_reader);
-        }
+        success = SelectHeadInternal<T>(p_reader);
         if (!success) {
             LOG(Helper::LogLevel::LL_Error, "SelectHead Failed!\n");
             return ErrorCode::Fail;
@@ -719,18 +683,17 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
 
     LOG(Helper::LogLevel::LL_Info, "Begin Build Head...\n");
     if (m_options.m_buildHead) {
-        auto valueType = m_pQuantizer ? SPTAG::VectorValueType::UInt8 : m_options.m_valueType;
-        auto dims = m_pQuantizer ? m_pQuantizer->GetNumSubvectors() : m_options.m_dim;
+        auto valueType = m_options.m_valueType;
+        auto dims = m_options.m_dim;
 
         m_index = std::shared_ptr<BKT::Index<T>>(new BKT::Index<T>());
         std::string distCalcMethod = SPTAG::Helper::Convert::ConvertToString(m_options.m_distCalcMethod);
         m_index->SetParameter("DistCalcMethod", distCalcMethod.c_str());
-        m_index->SetQuantizer(m_pQuantizer);
         for (const auto& iter : m_headParameters) {
             m_index->SetParameter(iter.first.c_str(), iter.second.c_str());
         }
 
-        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dims, VectorFileType::DEFAULT));
+        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dims));
         auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
         if (ErrorCode::Success != vectorReader->LoadFile(m_options.m_indexDirectory + FolderSep + m_options.m_headVectorFile)) {
             LOG(Helper::LogLevel::LL_Error, "Failed to read head vector file.\n");
@@ -742,7 +705,6 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
                 LOG(Helper::LogLevel::LL_Error, "Failed to build head index.\n");
                 return ErrorCode::Fail;
             }
-            m_index->SetQuantizerFileName(m_options.m_quantizerFilePath.substr(m_options.m_quantizerFilePath.find_last_of("/\\") + 1));
             if (m_index->SaveIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder) != ErrorCode::Success) {
                 LOG(Helper::LogLevel::LL_Error, "Failed to save head index.\n");
                 return ErrorCode::Fail;
@@ -764,7 +726,6 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
             LOG(Helper::LogLevel::LL_Error, "Cannot load head index from %s!\n", (m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder).c_str());
             return ErrorCode::Fail;
         }
-        m_index->SetQuantizer(m_pQuantizer);
         if (!CheckHeadIndexType())
             return ErrorCode::Fail;
 
@@ -835,9 +796,9 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
 
 template <typename T>
 ErrorCode Index<T>::BuildIndex(bool p_normalized) {
-    SPTAG::VectorValueType valueType = m_pQuantizer ? SPTAG::VectorValueType::UInt8 : m_options.m_valueType;
-    SizeType dim = m_pQuantizer ? m_pQuantizer->GetNumSubvectors() : m_options.m_dim;
-    std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dim, m_options.m_vectorType, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads, p_normalized));
+    SPTAG::VectorValueType valueType = m_options.m_valueType;
+    SizeType dim = m_options.m_dim;
+    std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dim, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads, p_normalized));
     auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
     if (m_options.m_vectorPath.empty()) {
         LOG(Helper::LogLevel::LL_Info, "Vector file is empty. Skipping loading.\n");
@@ -869,8 +830,8 @@ ErrorCode Index<T>::BuildIndex(const void* p_data, SizeType p_vectorNum, Dimensi
     if (m_options.m_distCalcMethod == DistCalcMethod::Cosine && !p_normalized) {
         vectorSet->Normalize(m_options.m_iSSDNumberOfThreads);
     }
-    SPTAG::VectorValueType valueType = m_pQuantizer ? SPTAG::VectorValueType::UInt8 : m_options.m_valueType;
-    std::shared_ptr<Helper::VectorSetReader> vectorReader(new Helper::MemoryVectorReader(std::make_shared<Helper::ReaderOptions>(valueType, p_dimension, VectorFileType::DEFAULT, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads, true), vectorSet));
+    SPTAG::VectorValueType valueType = m_options.m_valueType;
+    std::shared_ptr<Helper::VectorSetReader> vectorReader(new Helper::MemoryVectorReader(std::make_shared<Helper::ReaderOptions>(valueType, p_dimension, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads, true), vectorSet));
 
     m_options.m_valueType = GetEnumValueType<T>();
     m_options.m_dim = p_dimension;
@@ -899,13 +860,8 @@ ErrorCode Index<T>::SetParameter(const char* p_param, const char* p_value, const
         m_options.SetParameter(p_section, p_param, p_value);
     }
     if (SPTAG::Helper::StrUtils::StrEqualIgnoreCase(p_param, "DistCalcMethod")) {
-        if (m_pQuantizer) {
-            m_fComputeDistance = m_pQuantizer->DistanceCalcSelector<T>(m_options.m_distCalcMethod);
-            m_iBaseSquare = (m_options.m_distCalcMethod == DistCalcMethod::Cosine) ? m_pQuantizer->GetBase() * m_pQuantizer->GetBase() : 1;
-        } else {
-            m_fComputeDistance = COMMON::DistanceCalcSelector<T>(m_options.m_distCalcMethod);
-            m_iBaseSquare = (m_options.m_distCalcMethod == DistCalcMethod::Cosine) ? COMMON::Utils::GetBase<T>() * COMMON::Utils::GetBase<T>() : 1;
-        }
+        m_fComputeDistance = COMMON::DistanceCalcSelector<T>(m_options.m_distCalcMethod);
+        m_iBaseSquare = (m_options.m_distCalcMethod == DistCalcMethod::Cosine) ? COMMON::Utils::GetBase<T>() * COMMON::Utils::GetBase<T>() : 1;
     }
     return ErrorCode::Success;
 }

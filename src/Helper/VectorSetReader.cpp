@@ -4,14 +4,13 @@
 #include "Helper/VectorSetReader.h"
 #include "Helper/CommonHelper.h"
 
-SPTAG::Helper::ReaderOptions::ReaderOptions(SPTAG::VectorValueType p_valueType, SPTAG::DimensionType p_dimension, SPTAG::VectorFileType p_fileType, std::string p_vectorDelimiter, std::uint32_t p_threadNum, bool p_normalized)
-    : m_inputValueType(p_valueType), m_dimension(p_dimension), m_inputFileType(p_fileType), m_vectorDelimiter(p_vectorDelimiter), m_threadNum(p_threadNum), m_normalized(p_normalized) {
+SPTAG::Helper::ReaderOptions::ReaderOptions(SPTAG::VectorValueType p_valueType, SPTAG::DimensionType p_dimension, std::string p_vectorDelimiter, std::uint32_t p_threadNum, bool p_normalized)
+    : m_inputValueType(p_valueType), m_dimension(p_dimension), m_vectorDelimiter(p_vectorDelimiter), m_threadNum(p_threadNum), m_normalized(p_normalized) {
     AddOptionalOption(m_threadNum, "-t", "--thread", "Thread Number.");
     AddOptionalOption(m_vectorDelimiter, "-dl", "--delimiter", "Vector delimiter.");
     AddOptionalOption(m_normalized, "-norm", "--normalized", "Vector is normalized.");
     AddRequiredOption(m_dimension, "-d", "--dimension", "Dimension of vector.");
     AddRequiredOption(m_inputValueType, "-v", "--vectortype", "Input vector data type. Default is float.");
-    AddRequiredOption(m_inputFileType, "-f", "--filetype", "Input file type (DEFAULT). Default is DEFAULT.");
 }
 
 SPTAG::Helper::ReaderOptions::~ReaderOptions() {

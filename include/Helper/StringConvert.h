@@ -191,24 +191,6 @@ inline bool ConvertStringTo<IndexAlgoType>(const char* p_str, IndexAlgoType& p_v
 }
 
 template <>
-inline bool ConvertStringTo<VectorFileType>(const char* p_str, VectorFileType& p_value) {
-    if (nullptr == p_str) {
-        return false;
-    }
-
-#define DefineVectorFileType(Name)                         \
-    else if (StrUtils::StrEqualIgnoreCase(p_str, #Name)) { \
-        p_value = VectorFileType::Name;                    \
-        return true;                                       \
-    }
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorFileType
-
-    return false;
-}
-
-template <>
 inline bool ConvertStringTo<TruthFileType>(const char* p_str, TruthFileType& p_value) {
     if (nullptr == p_str) {
         return false;
@@ -262,24 +244,6 @@ inline bool ConvertStringTo<VectorValueType>(const char* p_str, VectorValueType&
     return false;
 }
 
-template <>
-inline bool ConvertStringTo<QuantizerType>(const char* p_str, QuantizerType& p_value) {
-    if (nullptr == p_str) {
-        return false;
-    }
-
-#define DefineQuantizerType(Name, Type)                    \
-    else if (StrUtils::StrEqualIgnoreCase(p_str, #Name)) { \
-        p_value = QuantizerType::Name;                     \
-        return true;                                       \
-    }
-
-#include "Core/DefinitionList.h"
-#undef DefineQuantizerType
-
-    return false;
-}
-
 // Specialization of ConvertToString<>().
 
 template <>
@@ -301,23 +265,6 @@ inline std::string ConvertToString<IndexAlgoType>(const IndexAlgoType& p_value) 
 
 #include "Core/DefinitionList.h"
 #undef DefineIndexAlgo
-
-        default:
-            break;
-    }
-
-    return "Undefined";
-}
-
-template <>
-inline std::string ConvertToString<QuantizerType>(const QuantizerType& p_value) {
-    switch (p_value) {
-#define DefineQuantizerType(Name, foo) \
-    case QuantizerType::Name:          \
-        return #Name;
-
-#include "Core/DefinitionList.h"
-#undef DefineQuantizerType
 
         default:
             break;
@@ -352,23 +299,6 @@ inline std::string ConvertToString<VectorValueType>(const VectorValueType& p_val
 
 #include "Core/DefinitionList.h"
 #undef DefineVectorValueType
-
-        default:
-            break;
-    }
-
-    return "Undefined";
-}
-
-template <>
-inline std::string ConvertToString<VectorFileType>(const VectorFileType& p_value) {
-    switch (p_value) {
-#define DefineVectorFileType(Name) \
-    case VectorFileType::Name:     \
-        return #Name;
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorFileType
 
         default:
             break;

@@ -137,9 +137,6 @@ class TruthSet {
     }
 
     template <typename T>
-    static void GenerateTruth(std::shared_ptr<VectorSet> querySet, std::shared_ptr<VectorSet> vectorSet, const std::string truthFile, const SPTAG::DistCalcMethod distMethod, const int K, const SPTAG::TruthFileType p_truthFileType, const std::shared_ptr<IQuantizer>& quantizer);
-
-    template <typename T>
     static float CalculateRecall(VectorIndex* index, std::vector<QueryResult>& results, const std::vector<std::set<SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false, float* MRR = nullptr) {
         float meanrecall = 0, minrecall = MaxDist, maxrecall = 0, stdrecall = 0, meanmrr = 0;
         std::vector<float> thisrecall(NumQuerys, 0);
@@ -218,17 +215,10 @@ class TruthSet {
     static float CalculateRecall(VectorIndex* index, T* query, int K) {
         COMMON::QueryResultSet<void> sampleANN(query, K);
         COMMON::QueryResultSet<void> sampleTruth(query, K);
-        void* reconstructVector = nullptr;
-        if (index->m_pQuantizer) {
-            reconstructVector = ALIGN_ALLOC(index->m_pQuantizer->ReconstructSize());
-            index->m_pQuantizer->ReconstructVector((const uint8_t*)query, reconstructVector);
-            sampleANN.SetTarget(reconstructVector, index->m_pQuantizer);
-            sampleTruth.SetTarget(reconstructVector, index->m_pQuantizer);
-        }
 
         index->SearchIndex(sampleANN);
         for (SizeType y = 0; y < index->GetNumSamples(); y++) {
-            float dist = index->ComputeDistance(sampleTruth.GetQuantizedTarget(), index->GetSample(y));
+            float dist = index->ComputeDistance(query, index->GetSample(y));
             sampleTruth.AddPoint(y, dist);
         }
         sampleTruth.SortResult();
@@ -246,9 +236,6 @@ class TruthSet {
                     break;
                 }
             }
-        }
-        if (reconstructVector) {
-            ALIGN_FREE(reconstructVector);
         }
 
         return recalls / K;

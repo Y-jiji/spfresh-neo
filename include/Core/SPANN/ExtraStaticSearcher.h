@@ -97,16 +97,16 @@ struct Selection {
         }                                                                                                                                                                                                             \
     }
 
-#define ProcessPosting()                                                                                                        \
-    for (int i = 0; i < listInfo->listEleCount; i++) {                                                                          \
-        uint64_t offsetVectorID, offsetVector;                                                                                  \
-        (this->*m_parsePosting)(offsetVectorID, offsetVector, i, listInfo->listEleCount);                                       \
-        int vectorID = *(reinterpret_cast<int*>(p_postingListFullData + offsetVectorID));                                       \
-        if (p_exWorkSpace->m_deduper.CheckAndSet(vectorID))                                                                     \
-            continue;                                                                                                           \
-        (this->*m_parseEncoding)(p_index, listInfo, (ValueType*)(p_postingListFullData + offsetVector));                        \
-        auto distance2leaf = p_index->ComputeDistance(queryResults.GetQuantizedTarget(), p_postingListFullData + offsetVector); \
-        queryResults.AddPoint(vectorID, distance2leaf);                                                                         \
+#define ProcessPosting()                                                                                               \
+    for (int i = 0; i < listInfo->listEleCount; i++) {                                                                 \
+        uint64_t offsetVectorID, offsetVector;                                                                         \
+        (this->*m_parsePosting)(offsetVectorID, offsetVector, i, listInfo->listEleCount);                              \
+        int vectorID = *(reinterpret_cast<int*>(p_postingListFullData + offsetVectorID));                              \
+        if (p_exWorkSpace->m_deduper.CheckAndSet(vectorID))                                                            \
+            continue;                                                                                                  \
+        (this->*m_parseEncoding)(p_index, listInfo, (ValueType*)(p_postingListFullData + offsetVector));               \
+        auto distance2leaf = p_index->ComputeDistance(queryResults.GetTarget(), p_postingListFullData + offsetVector); \
+        queryResults.AddPoint(vectorID, distance2leaf);                                                                \
     }
 
 template <typename ValueType>
@@ -424,7 +424,7 @@ class ExtraStaticSearcher : public IExtraSearcher {
                 SizeType start = i * batchSize;
                 SizeType end = min(start + batchSize, fullCount);
                 auto fullVectors = p_reader->GetVectorSet(start, end);
-                if (p_opt.m_distCalcMethod == DistCalcMethod::Cosine && !p_reader->IsNormalized() && !p_headIndex->m_pQuantizer)
+                if (p_opt.m_distCalcMethod == DistCalcMethod::Cosine && !p_reader->IsNormalized())
                     fullVectors->Normalize(p_opt.m_iSSDNumberOfThreads);
 
                 if (p_opt.m_batches > 1) {
@@ -572,7 +572,7 @@ class ExtraStaticSearcher : public IExtraSearcher {
         }
 
         auto fullVectors = p_reader->GetVectorSet();
-        if (p_opt.m_distCalcMethod == DistCalcMethod::Cosine && !p_reader->IsNormalized() && !p_headIndex->m_pQuantizer)
+        if (p_opt.m_distCalcMethod == DistCalcMethod::Cosine && !p_reader->IsNormalized())
             fullVectors->Normalize(p_opt.m_iSSDNumberOfThreads);
 
         // iterate over files

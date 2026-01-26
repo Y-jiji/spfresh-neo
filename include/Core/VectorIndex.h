@@ -10,7 +10,6 @@
 #include "MetadataSet.h"
 #include "Helper/SimpleIniReader.h"
 #include <unordered_set>
-#include "Core/Common/IQuantizer.h"
 #include "MetaDataManager.h"
 
 namespace SPTAG {
@@ -116,19 +115,6 @@ class VectorIndex {
         m_metadataManager.SetIndexName(p_name);
     }
 
-    virtual void SetQuantizerFileName(std::string p_QuantizerFileName) {
-        m_metadataManager.SetQuantizerFile(p_QuantizerFileName);
-    }
-
-    virtual void SetQuantizerADC(bool enableADC) {
-        if (m_pQuantizer)
-            m_pQuantizer->SetEnableADC(enableADC);
-    }
-
-    virtual void SetQuantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer) = 0;
-
-    virtual ErrorCode LoadQuantizer(std::string p_quantizerFile);
-
     static ErrorCode LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<VectorIndex>& p_vectorIndex);
 
     static ErrorCode LoadIndexFromFile(const std::string& p_file, std::shared_ptr<VectorIndex>& p_vectorIndex);
@@ -181,7 +167,6 @@ class VectorIndex {
     int m_iDataBlockSize = 1024 * 1024;
     int m_iDataCapacity = MaxSize;
     int m_iMetaRecordSize = 10;
-    std::shared_ptr<SPTAG::COMMON::IQuantizer> m_pQuantizer = nullptr;
 };
 
 }  // namespace SPTAG

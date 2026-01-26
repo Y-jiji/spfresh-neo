@@ -18,15 +18,12 @@ class Options {
     IndexAlgoType m_indexAlgoType;
     DimensionType m_dim;
     std::string m_vectorPath;
-    VectorFileType m_vectorType;
     SizeType m_vectorSize;          // Optional on condition
     std::string m_vectorDelimiter;  // Optional on condition
     std::string m_queryPath;
-    VectorFileType m_queryType;
     SizeType m_querySize;          // Optional on condition
     std::string m_queryDelimiter;  // Optional on condition
     std::string m_warmupPath;
-    VectorFileType m_warmupType;
     SizeType m_warmupSize;          // Optional on condition
     std::string m_warmupDelimiter;  // Optional on condition
     std::string m_truthPath;
@@ -40,7 +37,6 @@ class Options {
     std::string m_ssdIndex;
     bool m_deleteHeadVectors;
     int m_ssdIndexFileNum;
-    std::string m_quantizerFilePath;
     int m_datasetRowsInBlock;
     int m_datasetCapacity;
 

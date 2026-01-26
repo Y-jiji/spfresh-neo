@@ -25,13 +25,12 @@ struct KDTNode {
 
 class KDTree {
    public:
-    KDTree() : m_iTreeNumber(2), m_numTopDimensionKDTSplit(5), m_iSamples(1000), m_lock(new std::shared_timed_mutex), m_pQuantizer(nullptr) {}
+    KDTree() : m_iTreeNumber(2), m_numTopDimensionKDTSplit(5), m_iSamples(1000), m_lock(new std::shared_timed_mutex) {}
 
     KDTree(const KDTree& other) : m_iTreeNumber(other.m_iTreeNumber),
                                   m_numTopDimensionKDTSplit(other.m_numTopDimensionKDTSplit),
                                   m_iSamples(other.m_iSamples),
-                                  m_lock(new std::shared_timed_mutex),
-                                  m_pQuantizer(other.m_pQuantizer) {}
+                                  m_lock(new std::shared_timed_mutex) {}
     ~KDTree() {}
 
     inline const KDTNode& operator[](SizeType index) const {
@@ -62,25 +61,10 @@ class KDTree {
 
     template <typename T>
     void BuildTrees(const Dataset<T>& data, int numOfThreads, std::vector<SizeType>* indices = nullptr, IAbortOperation* abort = nullptr) {
-        if (m_pQuantizer) {
-            switch (m_pQuantizer->GetReconstructType()) {
-#define DefineVectorValueType(Name, Type)                            \
-    case VectorValueType::Name:                                      \
-        BuildTreesCore<T, Type>(data, numOfThreads, indices, abort); \
-        break;
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-                default:
-                    break;
-            }
-        } else {
-            BuildTreesCore<T, T>(data, numOfThreads, indices, abort);
-        }
+        BuildTreesCore<T, T>(data, numOfThreads, indices, abort);
     }
 
-    template <typename T, typename R>
+    template <typename T>
     void BuildTreesCore(const Dataset<T>& data, int numOfThreads, std::vector<SizeType>* indices = nullptr, IAbortOperation* abort = nullptr) {
         std::vector<SizeType> localindices;
         if (indices == nullptr) {
@@ -107,7 +91,7 @@ class KDTree {
             m_pTreeStart[i] = i * (SizeType)pindices.size();
             LOG(Helper::LogLevel::LL_Info, "Start to build KDTree %d\n", i + 1);
             SizeType iTreeSize = m_pTreeStart[i];
-            DivideTree<T, R>(data, pindices, 0, (SizeType)pindices.size() - 1, m_pTreeStart[i], iTreeSize, abort);
+            DivideTree<T>(data, pindices, 0, (SizeType)pindices.size() - 1, m_pTreeStart[i], iTreeSize, abort);
             LOG(Helper::LogLevel::LL_Info, "%d KDTree built, %d %zu\n", i + 1, iTreeSize - m_pTreeStart[i], pindices.size());
         }
     }
@@ -202,23 +186,23 @@ class KDTree {
         return LoadTrees(ptr);
     }
 
-    template <typename T, typename Q>
+    template <typename T>
     void InitSearchTrees(const Dataset<T>& p_data, std::function<float(const T*, const T*, DimensionType)> fComputeDistance, COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_space) const {
         for (int i = 0; i < m_iTreeNumber; i++) {
-            KDTSearch<T, Q>(p_data, fComputeDistance, p_query, p_space, m_pTreeStart[i], 0);
+            KDTSearch<T>(p_data, fComputeDistance, p_query, p_space, m_pTreeStart[i], 0);
         }
     }
 
-    template <typename T, typename Q>
+    template <typename T>
     void SearchTrees(const Dataset<T>& p_data, std::function<float(const T*, const T*, DimensionType)> fComputeDistance, COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_space, const int p_limits) const {
         while (!p_space.m_SPTQueue.empty() && p_space.m_iNumberOfCheckedLeaves < p_limits) {
             auto& tcell = p_space.m_SPTQueue.pop();
-            KDTSearch<T, Q>(p_data, fComputeDistance, p_query, p_space, tcell.node, tcell.distance);
+            KDTSearch<T>(p_data, fComputeDistance, p_query, p_space, tcell.node, tcell.distance);
         }
     }
 
    private:
-    template <typename T, typename Q>
+    template <typename T>
     void KDTSearch(const Dataset<T>& p_data, std::function<float(const T*, const T*, DimensionType)> fComputeDistance, COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_space, const SizeType node, const float distBound) const {
         if (node < 0) {
             SizeType index = -node - 1;
@@ -234,13 +218,13 @@ class KDTree {
 
             ++p_space.m_iNumberOfTreeCheckedLeaves;
             ++p_space.m_iNumberOfCheckedLeaves;
-            p_space.m_NGQueue.insert(NodeDistPair(index, fComputeDistance(p_query.GetQuantizedTarget(), data, p_data.C())));
+            p_space.m_NGQueue.insert(NodeDistPair(index, fComputeDistance(p_query.GetTarget(), data, p_data.C())));
             return;
         }
 
         auto& tnode = m_pTreeRoots[node];
 
-        float diff = ((Q*)p_query.GetTarget())[tnode.split_dim] - tnode.split_value;
+        float diff = ((T*)p_query.GetTarget())[tnode.split_dim] - tnode.split_value;
         float distanceBound = distBound + diff * diff;
         SizeType otherChild, bestChild;
         if (diff < 0) {
@@ -252,54 +236,42 @@ class KDTree {
         }
 
         p_space.m_SPTQueue.insert(NodeDistPair(otherChild, distanceBound));
-        KDTSearch<T, Q>(p_data, fComputeDistance, p_query, p_space, bestChild, distBound);
+        KDTSearch<T>(p_data, fComputeDistance, p_query, p_space, bestChild, distBound);
     }
 
-    template <typename T, typename R>
+    template <typename T>
     void DivideTree(const Dataset<T>& data, std::vector<SizeType>& indices, SizeType first, SizeType last, SizeType index, SizeType& iTreeSize, IAbortOperation* abort = nullptr) {
         if (abort && abort->ShouldAbort())
             return;
 
-        ChooseDivision<T, R>(data, m_pTreeRoots[index], indices, first, last);
-        SizeType i = Subdivide<T, R>(data, m_pTreeRoots[index], indices, first, last);
+        ChooseDivision<T>(data, m_pTreeRoots[index], indices, first, last);
+        SizeType i = Subdivide<T>(data, m_pTreeRoots[index], indices, first, last);
         if (i - 1 <= first) {
             m_pTreeRoots[index].left = -indices[first] - 1;
         } else {
             iTreeSize++;
             m_pTreeRoots[index].left = iTreeSize;
-            DivideTree<T, R>(data, indices, first, i - 1, iTreeSize, iTreeSize);
+            DivideTree<T>(data, indices, first, i - 1, iTreeSize, iTreeSize);
         }
         if (last == i) {
             m_pTreeRoots[index].right = -indices[last] - 1;
         } else {
             iTreeSize++;
             m_pTreeRoots[index].right = iTreeSize;
-            DivideTree<T, R>(data, indices, i, last, iTreeSize, iTreeSize);
+            DivideTree<T>(data, indices, i, last, iTreeSize, iTreeSize);
         }
     }
 
-    template <typename T, typename R>
+    template <typename T>
     void ChooseDivision(const Dataset<T>& data, KDTNode& node, const std::vector<SizeType>& indices, const SizeType first, const SizeType last) {
         SizeType cols = data.C();
-        bool quantizer_exists = (nullptr != m_pQuantizer);
-        R* v_holder = nullptr;
-        if (quantizer_exists) {
-            cols = m_pQuantizer->ReconstructDim();
-            v_holder = (R*)ALIGN_ALLOC(m_pQuantizer->ReconstructSize());
-        }
         std::vector<float> meanValues(cols, 0);
         std::vector<float> varianceValues(cols, 0);
         SizeType end = min(first + m_iSamples, last);
         SizeType count = end - first + 1;
         // calculate the mean of each dimension
         for (SizeType j = first; j <= end; j++) {
-            R* v;
-            if (quantizer_exists) {
-                m_pQuantizer->ReconstructVector((uint8_t*)data[indices[j]], v_holder);
-                v = v_holder;
-            } else {
-                v = (R*)data[indices[j]];
-            }
+            const T* v = data[indices[j]];
             for (DimensionType k = 0; k < cols; k++) {
                 meanValues[k] += v[k];
             }
@@ -309,20 +281,11 @@ class KDTree {
         }
         // calculate the variance of each dimension
         for (SizeType j = first; j <= end; j++) {
-            R* v;
-            if (quantizer_exists) {
-                m_pQuantizer->ReconstructVector((uint8_t*)data[indices[j]], v_holder);
-                v = v_holder;
-            } else {
-                v = (R*)data[indices[j]];
-            }
+            const T* v = data[indices[j]];
             for (DimensionType k = 0; k < cols; k++) {
                 float dist = v[k] - meanValues[k];
                 varianceValues[k] += dist * dist;
             }
-        }
-        if (quantizer_exists) {
-            ALIGN_FREE(v_holder);
         }
         // choose the split dimension as one of the dimension inside TOP_DIM maximum variance
         node.split_dim = SelectDivisionDimension(varianceValues);
@@ -354,25 +317,13 @@ class KDTree {
         return topind[COMMON::Utils::rand(num)];
     }
 
-    template <typename T, typename R>
+    template <typename T>
     SizeType Subdivide(const Dataset<T>& data, const KDTNode& node, std::vector<SizeType>& indices, const SizeType first, const SizeType last) const {
         SizeType i = first;
         SizeType j = last;
-        bool quantizer_exists = (m_pQuantizer != nullptr);
-        R* v_holder = nullptr;
-        if (quantizer_exists) {
-            v_holder = (R*)ALIGN_ALLOC(m_pQuantizer->ReconstructSize());
-        }
         // decide which child one point belongs
         while (i <= j) {
-            R* v;
-            SizeType ind = indices[i];
-            if (quantizer_exists) {
-                m_pQuantizer->ReconstructVector((uint8_t*)data[ind], v_holder);
-                v = v_holder;
-            } else {
-                v = (R*)data[ind];
-            }
+            const T* v = data[indices[i]];
             float val = v[node.split_dim];
             if (val < node.split_value) {
                 i++;
@@ -380,9 +331,6 @@ class KDTree {
                 std::swap(indices[i], indices[j]);
                 j--;
             }
-        }
-        if (quantizer_exists) {
-            ALIGN_FREE(v_holder);
         }
         // if all the points in the node are equal,equally split the node into 2
         if ((i == first) || (i == last + 1)) {
@@ -399,7 +347,6 @@ class KDTree {
     std::unique_ptr<std::shared_timed_mutex> m_lock;
     int m_iTreeNumber, m_numTopDimensionKDTSplit, m_iSamples;
     bool m_bOldVersion;
-    std::shared_ptr<SPTAG::COMMON::IQuantizer> m_pQuantizer;
 };
 }  // namespace SPTAG::COMMON
 #endif

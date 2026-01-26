@@ -19,7 +19,6 @@
 #include "Helper/SimpleIniReader.h"
 #include "Helper/StringConvert.h"
 #include "Helper/ThreadPool.h"
-#include "Core/Common/IQuantizer.h"
 
 #include <functional>
 #include <shared_mutex>
@@ -123,7 +122,6 @@ class Index : public VectorIndex {
     inline VectorValueType GetVectorValueType() const {
         return GetEnumValueType<T>();
     }
-    void SetQuantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer);
 
     inline float AccurateDistance(const void* pX, const void* pY) const {
         if (m_iDistCalcMethod == DistCalcMethod::L2)

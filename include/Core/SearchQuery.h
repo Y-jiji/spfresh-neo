@@ -19,9 +19,7 @@ class QueryResult {
     QueryResult()
         : m_target(nullptr),
           m_resultNum(0),
-          m_withMeta(false),
-          m_quantizedTarget(nullptr),
-          m_quantizedSize(0) {
+          m_withMeta(false) {
     }
 
     QueryResult(const void* p_target, int p_resultNum, bool p_withMeta) {
@@ -31,9 +29,7 @@ class QueryResult {
     QueryResult(const void* p_target, int p_resultNum, bool p_withMeta, BasicResult* p_results)
         : m_target(p_target),
           m_resultNum(p_resultNum),
-          m_withMeta(p_withMeta),
-          m_quantizedTarget((void*)p_target),
-          m_quantizedSize(0) {
+          m_withMeta(p_withMeta) {
         m_results.Set(p_results, p_resultNum, false);
     }
 
@@ -42,41 +38,23 @@ class QueryResult {
         if (m_resultNum > 0) {
             std::copy(p_other.m_results.Data(), p_other.m_results.Data() + m_resultNum, m_results.Data());
         }
-        if (p_other.m_target != p_other.m_quantizedTarget) {
-            m_quantizedSize = p_other.m_quantizedSize;
-            m_quantizedTarget = ALIGN_ALLOC(m_quantizedSize);
-            std::copy(reinterpret_cast<std::uint8_t*>(p_other.m_quantizedTarget), reinterpret_cast<std::uint8_t*>(p_other.m_quantizedTarget) + m_quantizedSize, reinterpret_cast<std::uint8_t*>(m_quantizedTarget));
-        }
     }
 
     QueryResult& operator=(const QueryResult& p_other) {
-        if (m_target != m_quantizedTarget)
-            ALIGN_FREE(m_quantizedTarget);
-
         Init(p_other.m_target, p_other.m_resultNum, p_other.m_withMeta);
         if (m_resultNum > 0) {
             std::copy(p_other.m_results.Data(), p_other.m_results.Data() + m_resultNum, m_results.Data());
-        }
-        if (p_other.m_target != p_other.m_quantizedTarget) {
-            m_quantizedSize = p_other.m_quantizedSize;
-            m_quantizedTarget = ALIGN_ALLOC(m_quantizedSize);
-            std::copy(reinterpret_cast<std::uint8_t*>(p_other.m_quantizedTarget), reinterpret_cast<std::uint8_t*>(p_other.m_quantizedTarget) + m_quantizedSize, reinterpret_cast<std::uint8_t*>(m_quantizedTarget));
         }
         return *this;
     }
 
     ~QueryResult() {
-        if (m_target != m_quantizedTarget) {
-            ALIGN_FREE(m_quantizedTarget);
-        }
     }
 
     inline void Init(const void* p_target, int p_resultNum, bool p_withMeta) {
         m_target = p_target;
         m_resultNum = p_resultNum;
         m_withMeta = p_withMeta;
-        m_quantizedTarget = (void*)p_target;
-        m_quantizedSize = 0;
 
         m_results = Array<BasicResult>::Alloc(p_resultNum);
     }
@@ -89,28 +67,8 @@ class QueryResult {
         return m_target;
     }
 
-    inline void* GetQuantizedTarget() {
-        return m_quantizedTarget;
-    }
-
     inline void SetTarget(const void* p_target) {
-        if (m_target != m_quantizedTarget) {
-            ALIGN_FREE(m_quantizedTarget);
-        }
         m_target = p_target;
-        m_quantizedTarget = (void*)p_target;
-        m_quantizedSize = 0;
-    }
-
-    inline bool HasQuantizedTarget() {
-        return m_target != m_quantizedTarget;
-    }
-
-    inline void CleanQuantizedTarget() {
-        if (m_target != m_quantizedTarget) {
-            ALIGN_FREE(m_quantizedTarget);
-            m_quantizedTarget = (void*)m_target;
-        }
     }
 
     inline BasicResult* GetResult(int i) const {
@@ -172,10 +130,6 @@ class QueryResult {
 
    protected:
     const void* m_target;
-
-    void* m_quantizedTarget;
-
-    SizeType m_quantizedSize;
 
     int m_resultNum;
 

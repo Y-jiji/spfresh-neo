@@ -139,10 +139,6 @@ void SearchSequential(SPANN::Index<ValueType>* p_index, int p_numThreads, std::v
         sendingCost,
         numQueries / sendingCost,
         static_cast<uint32_t>(numQueries));
-
-    for (int i = 0; i < numQueries; i++) {
-        p_results[i].CleanQuantizedTarget();
-    }
 }
 
 template <typename ValueType>
@@ -151,10 +147,6 @@ void Search(SPANN::Index<ValueType>* p_index) {
     std::string outputFile = p_opts.m_searchResult;
     std::string truthFile = p_opts.m_truthPath;
     std::string warmupFile = p_opts.m_warmupPath;
-
-    if (p_index->m_pQuantizer) {
-        p_index->m_pQuantizer->SetEnableADC(p_opts.m_enableADC);
-    }
 
     if (!p_opts.m_logFile.empty()) {
         g_pLogger.reset(new Helper::FileLogger(Helper::LogLevel::LL_Info, p_opts.m_logFile.c_str()));
@@ -166,7 +158,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
 
     if (!warmupFile.empty()) {
         LOG(Helper::LogLevel::LL_Info, "Start loading warmup query set...\n");
-        std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_warmupType, p_opts.m_warmupDelimiter));
+        std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_warmupDelimiter));
         auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
         if (ErrorCode::Success != queryReader->LoadFile(p_opts.m_warmupPath)) {
             LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
@@ -178,7 +170,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
         std::vector<QueryResult> warmupResults(warmupNumQueries, QueryResult(NULL, max(K, internalResultNum), false));
         std::vector<SPANN::SearchStats> warmpUpStats(warmupNumQueries);
         for (int i = 0; i < warmupNumQueries; ++i) {
-            (*((COMMON::QueryResultSet<ValueType>*)&warmupResults[i])).SetTarget(reinterpret_cast<ValueType*>(warmupQuerySet->GetVector(i)), p_index->m_pQuantizer);
+            (*((COMMON::QueryResultSet<ValueType>*)&warmupResults[i])).SetTarget(reinterpret_cast<ValueType*>(warmupQuerySet->GetVector(i)));
             warmupResults[i].Reset();
         }
 
@@ -188,7 +180,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
     }
 
     LOG(Helper::LogLevel::LL_Info, "Start loading QuerySet...\n");
-    std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryType, p_opts.m_queryDelimiter));
+    std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryDelimiter));
     auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
     if (ErrorCode::Success != queryReader->LoadFile(p_opts.m_queryPath)) {
         LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
@@ -200,7 +192,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
     std::vector<QueryResult> results(numQueries, QueryResult(NULL, max(K, internalResultNum), false));
     std::vector<SPANN::SearchStats> stats(numQueries);
     for (int i = 0; i < numQueries; ++i) {
-        (*((COMMON::QueryResultSet<ValueType>*)&results[i])).SetTarget(reinterpret_cast<ValueType*>(querySet->GetVector(i)), p_index->m_pQuantizer);
+        (*((COMMON::QueryResultSet<ValueType>*)&results[i])).SetTarget(reinterpret_cast<ValueType*>(querySet->GetVector(i)));
         results[i].Reset();
     }
 
@@ -213,7 +205,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
     std::shared_ptr<VectorSet> vectorSet;
 
     if (!p_opts.m_vectorPath.empty() && fileexists(p_opts.m_vectorPath.c_str())) {
-        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorType, p_opts.m_vectorDelimiter));
+        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorDelimiter));
         auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
         if (ErrorCode::Success == vectorReader->LoadFile(p_opts.m_vectorPath)) {
             vectorSet = vectorReader->GetVectorSet();
@@ -322,7 +314,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
 
             COMMON::QueryResultSet<ValueType> queryBFHeads((const ValueType*)(querySet->GetVector(samples[i])), max(sampleK, internalResultNum));
             for (SizeType y = 0; y < headIndex->GetNumSamples(); y++) {
-                float dist = headIndex->ComputeDistance(queryBFHeads.GetQuantizedTarget(), headIndex->GetSample(y));
+                float dist = headIndex->ComputeDistance((const ValueType*)(querySet->GetVector(samples[i])), headIndex->GetSample(y));
                 queryBFHeads.AddPoint(y, dist);
             }
             queryBFHeads.SortResult();

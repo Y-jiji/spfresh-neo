@@ -718,8 +718,7 @@ ErrorCode Bootstrap(SPANN::Options& opts) {
     Utils::StopW sw;
 
     LOG(Helper::LogLevel::LL_Info, "Start loading vector file.\n");
-    auto valueType = COMMON::DistanceUtils::Quantizer ? SPTAG::VectorValueType::UInt8 : opts.m_valueType;
-    std::shared_ptr<Helper::ReaderOptions> options(new Helper::ReaderOptions(valueType, opts.m_dim, opts.m_vectorType, opts.m_vectorDelimiter));
+    std::shared_ptr<Helper::ReaderOptions> options(new Helper::ReaderOptions(opts.m_valueType, opts.m_dim, opts.m_vectorType, opts.m_vectorDelimiter));
     auto vectorReader = Helper::VectorSetReader::CreateInstance(options);
     if (ErrorCode::Success != vectorReader->LoadFile(opts.m_vectorPath)) {
         LOG(Helper::LogLevel::LL_Error, "Failed to read vector file.\n");
@@ -748,7 +747,7 @@ ErrorCode Bootstrap(SPANN::Options& opts) {
         LOG(Helper::LogLevel::LL_Info, "Start generating Clustering head.\n");
         int headCnt = static_cast<int>(std::round(opts.m_ratio * vectorSet->Count()));
 
-        switch (valueType) {
+        switch (opts.m_valueType) {
 #define DefineVectorValueType(Name, Type)                     \
     case VectorValueType::Name:                               \
         Clustering<Type>(vectorSet, opts, selected, headCnt); \
@@ -764,7 +763,7 @@ ErrorCode Bootstrap(SPANN::Options& opts) {
     } else if (Helper::StrUtils::StrEqualIgnoreCase(opts.m_selectType.c_str(), "BKT")) {
         LOG(Helper::LogLevel::LL_Info, "Start generating BKT.\n");
         std::shared_ptr<COMMON::BKTree> bkt;
-        switch (valueType) {
+        switch (opts.m_valueType) {
 #define DefineVectorValueType(Name, Type)      \
     case VectorValueType::Name:                \
         bkt = BuildBKT<Type>(vectorSet, opts); \

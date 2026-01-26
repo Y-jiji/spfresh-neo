@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "Core/SPANN/ExtraSPDKController.h"
+#include <iostream>
 
 namespace SPTAG::SPANN {
 

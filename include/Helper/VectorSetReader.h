@@ -15,15 +15,13 @@ namespace SPTAG::Helper {
 
 class ReaderOptions : public ArgumentsParser {
    public:
-    ReaderOptions(VectorValueType p_valueType, DimensionType p_dimension, VectorFileType p_fileType, std::string p_vectorDelimiter = "|", std::uint32_t p_threadNum = 32, bool p_normalized = false);
+    ReaderOptions(VectorValueType p_valueType, DimensionType p_dimension, std::string p_vectorDelimiter = "|", std::uint32_t p_threadNum = 32, bool p_normalized = false);
 
     ~ReaderOptions();
 
     SPTAG::VectorValueType m_inputValueType;
 
     DimensionType m_dimension;
-
-    SPTAG::VectorFileType m_inputFileType;
 
     std::string m_vectorDelimiter;
 

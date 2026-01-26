@@ -27,9 +27,6 @@ class MetaDataManager {
     std::string GetMetadataIndexFile() const;
     void SetMetadataIndexFile(const std::string& p_file);
 
-    std::string GetQuantizerFile() const;
-    void SetQuantizerFile(const std::string& p_file);
-
     bool HasMetaMapping() const;
     SizeType GetMetaMapping(std::string& meta) const;
     void UpdateMetaMapping(const std::string& meta, SizeType i);
@@ -41,7 +38,6 @@ class MetaDataManager {
     std::string m_sIndexName;
     std::string m_sMetadataFile;
     std::string m_sMetadataIndexFile;
-    std::string m_sQuantizerFile;
     std::shared_ptr<void> m_pMetaToVec;
 };
 

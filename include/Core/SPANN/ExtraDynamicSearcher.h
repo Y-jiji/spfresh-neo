@@ -1123,7 +1123,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
                     listElements--;
                     continue;
                 }
-                auto distance2leaf = p_index->ComputeDistance(queryResults.GetQuantizedTarget(), vectorInfo + m_metaDataSize);
+                auto distance2leaf = p_index->ComputeDistance(queryResults.GetTarget(), vectorInfo + m_metaDataSize);
                 queryResults.AddPoint(vectorID, distance2leaf);
             }
             auto compEnd = std::chrono::high_resolution_clock::now();
@@ -1468,7 +1468,7 @@ class ExtraDynamicSearcher : public IExtraSearcher {
                 checked.insert(vectorID);
                 if (VID != -1 && VID == vectorID)
                     LOG(Helper::LogLevel::LL_Info, "Find %d in %dth posting\n", VID, i);
-                auto distance2leaf = p_index->ComputeDistance(queryResults.GetQuantizedTarget(), vectorInfo + m_metaDataSize);
+                auto distance2leaf = p_index->ComputeDistance(queryResults.GetTarget(), vectorInfo + m_metaDataSize);
                 if (distance2leaf < 1e-6)
                     return vectorID;
             }

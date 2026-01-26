@@ -22,28 +22,6 @@ ErrorCode Index<T>::LoadConfig(Helper::IniReader& p_reader) {
     return ErrorCode::Success;
 }
 
-template <>
-void Index<std::uint8_t>::SetQuantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer) {
-    m_pQuantizer = quantizer;
-    m_pTrees.m_pQuantizer = quantizer;
-    if (m_pQuantizer) {
-        m_fComputeDistance = m_pQuantizer->DistanceCalcSelector<std::uint8_t>(m_iDistCalcMethod);
-        m_iBaseSquare = (m_iDistCalcMethod == DistCalcMethod::Cosine) ? m_pQuantizer->GetBase() * m_pQuantizer->GetBase() : 1;
-    } else {
-        m_fComputeDistance = COMMON::DistanceCalcSelector<std::uint8_t>(m_iDistCalcMethod);
-        m_iBaseSquare = (m_iDistCalcMethod == DistCalcMethod::Cosine) ? COMMON::Utils::GetBase<std::uint8_t>() * COMMON::Utils::GetBase<std::uint8_t>() : 1;
-    }
-}
-
-template <typename T>
-void Index<T>::SetQuantizer(std::shared_ptr<SPTAG::COMMON::IQuantizer> quantizer) {
-    m_pQuantizer = quantizer;
-    m_pTrees.m_pQuantizer = quantizer;
-    if (quantizer) {
-        LOG(SPTAG::Helper::LogLevel::LL_Error, "Set non-null quantizer for index with data type other than BYTE");
-    }
-}
-
 template <typename T>
 ErrorCode Index<T>::LoadIndexDataFromMemory(const std::vector<ByteArray>& p_indexBlobs) {
     if (p_indexBlobs.size() < 3)
@@ -169,7 +147,7 @@ ErrorCode Index<T>::SaveIndexData(const std::vector<std::shared_ptr<Helper::Disk
                 SizeType nn_index = node[i]; \
                 if (nn_index < 0) break; \
                 if (p_space.CheckAndSet(nn_index)) continue; \
-                float distance2leaf = m_fComputeDistance(p_query.GetQuantizedTarget(), (m_pSamples)[nn_index], GetFeatureDim()); \
+                float distance2leaf = m_fComputeDistance(p_query.GetTarget(), (m_pSamples)[nn_index], GetFeatureDim()); \
                 p_space.m_iNumberOfCheckedLeaves++; \
                 p_space.m_NGQueue.insert(NodeDistPair(nn_index, distance2leaf)); \
             } \
@@ -226,7 +204,7 @@ ErrorCode Index<T>::SaveIndexData(const std::vector<std::shared_ptr<Helper::Disk
 //                 if (nn_index < 0) break; \
 //                 if (nn_index >= m_pSamples.R()) continue; \
 //                 if (p_space.CheckAndSet(nn_index)) continue; \
-//                 float distance2leaf = m_fComputeDistance(p_query.GetQuantizedTarget(), (m_pSamples)[nn_index], GetFeatureDim()); \
+//                 float distance2leaf = m_fComputeDistance(p_query.GetTarget(), (m_pSamples)[nn_index], GetFeatureDim()); \
 //                 p_space.m_iNumberOfCheckedLeaves++; \
 //                 if (p_space.m_Results.insert(distance2leaf)) { \
 //                     p_space.m_NGQueue.insert(NodeDistPair(nn_index, distance2leaf)); \
@@ -295,7 +273,7 @@ void Index<T>::Search(COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_s
             // IF_NDEBUG(if (nn_index >= m_pSamples.R()) continue; )
             if (p_space.CheckAndSet(nn_index))
                 continue;
-            float distance2leaf = m_fComputeDistance(p_query.GetQuantizedTarget(), (m_pSamples)[nn_index], GetFeatureDim());
+            float distance2leaf = m_fComputeDistance(p_query.GetTarget(), (m_pSamples)[nn_index], GetFeatureDim());
             p_space.m_iNumberOfCheckedLeaves++;
             if (p_space.m_Results.insert(distance2leaf)) {
                 p_space.m_NGQueue.insert(NodeDistPair(nn_index, distance2leaf));
@@ -337,10 +315,6 @@ bool CheckFilter(const std::shared_ptr<MetadataSet>& metadata, SizeType node, st
 
 template <typename T>
 void Index<T>::SearchIndex(COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_space, bool p_searchDeleted, bool p_searchDuplicated, std::function<bool(const ByteArray&)> filterFunc) const {
-    if (m_pQuantizer && !p_query.HasQuantizedTarget()) {
-        p_query.SetTarget(p_query.GetTarget(), m_pQuantizer);
-    }
-
     // bitflags for which dispatch to take
     uint8_t flags = 0;
     flags += (m_deletedID.Count() == 0 || p_searchDeleted) << 2;
@@ -756,9 +730,8 @@ Index<T>::SetParameter(const char* p_param, const char* p_value, const char* p_s
 #undef DefineBKTParameter
 
     if (SPTAG::Helper::StrUtils::StrEqualIgnoreCase(p_param, "DistCalcMethod")) {
-        m_fComputeDistance = m_pQuantizer ? m_pQuantizer->DistanceCalcSelector<T>(m_iDistCalcMethod) : COMMON::DistanceCalcSelector<T>(m_iDistCalcMethod);
-        auto base = m_pQuantizer ? m_pQuantizer->GetBase() : COMMON::Utils::GetBase<T>();
-        m_iBaseSquare = (m_iDistCalcMethod == DistCalcMethod::Cosine) ? base * base : 1;
+        m_fComputeDistance = COMMON::DistanceCalcSelector<T>(m_iDistCalcMethod);
+        m_iBaseSquare = (m_iDistCalcMethod == DistCalcMethod::Cosine) ? COMMON::Utils::GetBase<T>() * COMMON::Utils::GetBase<T>() : 1;
     }
     return ErrorCode::Success;
 }

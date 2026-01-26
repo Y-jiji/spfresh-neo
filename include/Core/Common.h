@@ -149,15 +149,6 @@ enum class IndexAlgoType : std::uint8_t {
 };
 static_assert(static_cast<std::uint8_t>(IndexAlgoType::Undefined) != 0, "Empty IndexAlgoType!");
 
-enum class VectorFileType : std::uint8_t {
-#define DefineVectorFileType(Name) Name,
-#include "DefinitionList.h"
-#undef DefineVectorFileType
-
-    Undefined
-};
-static_assert(static_cast<std::uint8_t>(VectorFileType::Undefined) != 0, "Empty VectorFileType!");
-
 enum class TruthFileType : std::uint8_t {
 #define DefineTruthFileType(Name) Name,
 #include "DefinitionList.h"
@@ -196,15 +187,6 @@ inline std::size_t GetValueTypeSize(VectorValueType p_valueType) {
 
     return 0;
 }
-
-enum class QuantizerType : std::uint8_t {
-#define DefineQuantizerType(Name, Type) Name,
-#include "DefinitionList.h"
-#undef DefineQuantizerType
-
-    Undefined
-};
-static_assert(static_cast<std::uint8_t>(QuantizerType::Undefined) != 0, "Empty QuantizerType!");
 
 }  // namespace SPTAG
 

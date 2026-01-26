@@ -7,7 +7,6 @@
 #include "Core/SearchQuery.h"
 #include "Utils/DistanceUtils.h"
 #include <algorithm>
-#include "IQuantizer.h"
 
 namespace SPTAG::COMMON {
 
@@ -32,27 +31,8 @@ class QueryResultSet : public QueryResult {
     ~QueryResultSet() {
     }
 
-    inline void SetTarget(const T* p_target, const std::shared_ptr<IQuantizer>& quantizer) {
-        if (quantizer == nullptr)
-            QueryResult::SetTarget((const void*)p_target);
-        else {
-            if (m_target == m_quantizedTarget || (m_quantizedSize != quantizer->QuantizeSize())) {
-                if (m_target != m_quantizedTarget)
-                    ALIGN_FREE(m_quantizedTarget);
-                m_quantizedTarget = ALIGN_ALLOC(quantizer->QuantizeSize());
-                m_quantizedSize = quantizer->QuantizeSize();
-            }
-            m_target = p_target;
-            quantizer->QuantizeVector((void*)p_target, (uint8_t*)m_quantizedTarget);
-        }
-    }
-
     inline const T* GetTarget() const {
         return reinterpret_cast<const T*>(m_target);
-    }
-
-    T* GetQuantizedTarget() {
-        return reinterpret_cast<T*>(m_quantizedTarget);
     }
 
     inline float worstDist() const {

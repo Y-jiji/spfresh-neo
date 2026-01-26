@@ -379,7 +379,7 @@ std::shared_ptr<SPTAG::VectorSet> LoadVectorSet(SPANN::Options& p_opts, int numT
     if (p_opts.m_loadAllVectors) {
         LOG(Helper::LogLevel::LL_Info, "Start loading VectorSet...\n");
         if (!p_opts.m_fullVectorPath.empty() && fileexists(p_opts.m_fullVectorPath.c_str())) {
-            std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorType, p_opts.m_vectorDelimiter));
+            std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorDelimiter));
             auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
             if (SPTAG::ErrorCode::Success == vectorReader->LoadFile(p_opts.m_fullVectorPath)) {
                 vectorSet = vectorReader->GetVectorSet();
@@ -433,7 +433,7 @@ std::shared_ptr<SPTAG::VectorSet> LoadUpdateVectors(SPANN::Options& p_opts, std:
 
 std::shared_ptr<VectorSet> LoadQuerySet(SPANN::Options& p_opts) {
     LOG(Helper::LogLevel::LL_Info, "Start loading QuerySet...\n");
-    std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryType, p_opts.m_queryDelimiter));
+    std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryDelimiter));
     auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
     if (SPTAG::ErrorCode::Success != queryReader->LoadFile(p_opts.m_queryPath)) {
         LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");

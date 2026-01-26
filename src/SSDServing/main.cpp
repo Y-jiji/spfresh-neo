@@ -22,7 +22,6 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
     SPTAG::DistCalcMethod distCalcMethod = SPTAG::DistCalcMethod::Undefined;
 
     bool searchSSD = false;
-    std::string QuantizerFilePath = "";
     Helper::IniReader iniReader;
     iniReader.LoadIniFile(configurationPath);
     (*config_map)[SEC_BASE] = iniReader.GetParameters(SEC_BASE);
@@ -34,7 +33,6 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
     distCalcMethod = iniReader.GetParameter(SEC_BASE, "DistCalcMethod", distCalcMethod);
     bool buildSSD = iniReader.GetParameter(SEC_BUILD_SSD_INDEX, "isExecute", false);
     searchSSD = iniReader.GetParameter(SEC_SEARCH_SSD_INDEX, "isExecute", false);
-    QuantizerFilePath = iniReader.GetParameter(SEC_BASE, "QuantizerFilePath", std::string(""));
 
     for (auto& KV : iniReader.GetParameters(SEC_SEARCH_SSD_INDEX)) {
         std::string param = KV.first, value = KV.second;
@@ -49,8 +47,6 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
         (*config_map)[SEC_BUILD_SSD_INDEX][param] = value;
     }
 
-    LOG(Helper::LogLevel::LL_Info, "Set QuantizerFile = %s\n", QuantizerFilePath.c_str());
-
     std::shared_ptr<SPTAG::VectorIndex> index;
     switch (valueType) {
 #define DefineVectorValueType(Name, Type)                                           \
@@ -63,10 +59,6 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
         default:
             LOG(Helper::LogLevel::LL_Error, "Cannot create Index with ValueType %s!\n", (*config_map)[SEC_BASE]["ValueType"].c_str());
             return -1;
-    }
-
-    if (!QuantizerFilePath.empty() && index->LoadQuantizer(QuantizerFilePath) != SPTAG::ErrorCode::Success) {
-        exit(1);
     }
 
     for (auto& sectionKV : *config_map) {
@@ -98,17 +90,13 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
     if (opts->m_generateTruth) {
         LOG(Helper::LogLevel::LL_Info, "Start generating truth. It's maybe a long time.\n");
         SPTAG::SizeType dim = opts->m_dim;
-        if (index->m_pQuantizer) {
-            valueType = SPTAG::VectorValueType::UInt8;
-            dim = index->m_pQuantizer->GetNumSubvectors();
-        }
-        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dim, opts->m_vectorType, opts->m_vectorDelimiter));
+        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dim, opts->m_vectorDelimiter));
         auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
         if (SPTAG::ErrorCode::Success != vectorReader->LoadFile(opts->m_vectorPath)) {
             LOG(Helper::LogLevel::LL_Error, "Failed to read vector file.\n");
             exit(1);
         }
-        std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(opts->m_valueType, opts->m_dim, opts->m_queryType, opts->m_queryDelimiter));
+        std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(opts->m_valueType, opts->m_dim, opts->m_queryDelimiter));
         auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
         if (SPTAG::ErrorCode::Success != queryReader->LoadFile(opts->m_queryPath)) {
             LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
@@ -116,20 +104,8 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
         }
         auto vectorSet = vectorReader->GetVectorSet();
         auto querySet = queryReader->GetVectorSet();
-        if (distCalcMethod == SPTAG::DistCalcMethod::Cosine && !index->m_pQuantizer)
+        if (distCalcMethod == SPTAG::DistCalcMethod::Cosine)
             vectorSet->Normalize(opts->m_iSSDNumberOfThreads);
-
-        omp_set_num_threads(opts->m_iSSDNumberOfThreads);
-
-#define DefineVectorValueType(Name, Type)                                                                                                                         \
-    if (opts->m_valueType == SPTAG::VectorValueType::Name) {                                                                                                      \
-        COMMON::TruthSet::GenerateTruth<Type>(querySet, vectorSet, opts->m_truthPath, distCalcMethod, opts->m_resultNum, opts->m_truthType, index->m_pQuantizer); \
-    }
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-        LOG(Helper::LogLevel::LL_Info, "End generating truth.\n");
     }
 
     if (searchSSD) {
