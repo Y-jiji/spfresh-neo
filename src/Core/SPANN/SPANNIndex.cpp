@@ -54,9 +54,9 @@ ErrorCode Index<T>::LoadIndexDataFromMemory(const std::vector<ByteArray>& p_inde
     if (m_index->LoadIndexDataFromMemory(p_indexBlobs) != ErrorCode::Success)
         return ErrorCode::Fail;
 
-    m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads));
-    // m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck));
-    // m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp));
+    m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads).c_str());
+    // m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck).c_str());
+    // m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp).c_str());
     m_index->UpdateIndex();
     m_index->SetReady(true);
 
@@ -77,9 +77,9 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     if (m_index->LoadIndexData(p_indexStreams) != ErrorCode::Success)
         return ErrorCode::Fail;
 
-    m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads));
-    m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck));
-    m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp));
+    m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads).c_str());
+    m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck).c_str());
+    m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp).c_str());
     m_index->UpdateIndex();
     m_index->SetReady(true);
 
@@ -281,7 +281,7 @@ ErrorCode Index<T>::SearchIndex(QueryResult& p_query, bool p_searchDeleted) cons
 
         if (m_vectorTranslateMap.get() != nullptr)
             p_queryResults->Reverse();
-        m_extraSearcher->SearchIndex(m_workspace.get(), *p_queryResults, m_index, nullptr);
+        m_extraSearcher->SearchIndex(m_workspace.get(), *p_queryResults, m_index, nullptr, nullptr, nullptr);
         p_queryResults->SortResult();
     }
 
@@ -343,7 +343,7 @@ ErrorCode Index<T>::SearchDiskIndex(QueryResult& p_query, SearchStats* p_stats) 
     }
     if (m_vectorTranslateMap.get() != nullptr)
         p_queryResults->Reverse();
-    m_extraSearcher->SearchIndex(m_workspace.get(), *p_queryResults, m_index, p_stats);
+    m_extraSearcher->SearchIndex(m_workspace.get(), *p_queryResults, m_index, p_stats, nullptr, nullptr);
     p_queryResults->SortResult();
     return ErrorCode::Success;
 }
@@ -701,7 +701,7 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
         }
         {
             auto headvectorset = vectorReader->GetVectorSet();
-            if (m_index->BuildIndex(headvectorset, nullptr, false, true, true) != ErrorCode::Success) {
+            if (m_index->BuildIndex(headvectorset->GetData(), headvectorset->Count(), headvectorset->Dimension(), false, true) != ErrorCode::Success) {
                 LOG(Helper::LogLevel::LL_Error, "Failed to build head index.\n");
                 return ErrorCode::Fail;
             }
@@ -711,8 +711,11 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
             }
         }
         m_index.reset();
-        if (LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, m_index) != ErrorCode::Success) {
+        std::shared_ptr<VectorIndex> tmpIndex;
+        if (LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, tmpIndex) != ErrorCode::Success) {
             LOG(Helper::LogLevel::LL_Error, "Cannot load head index from %s!\n", (m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder).c_str());
+        } else {
+            m_index = std::dynamic_pointer_cast<BKT::Index<T>>(tmpIndex);
         }
     }
     auto t3 = std::chrono::high_resolution_clock::now();
@@ -722,16 +725,21 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
     if (m_options.m_enableSSD) {
         omp_set_num_threads(m_options.m_iSSDNumberOfThreads);
 
-        if (m_index == nullptr && LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, m_index) != ErrorCode::Success) {
-            LOG(Helper::LogLevel::LL_Error, "Cannot load head index from %s!\n", (m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder).c_str());
-            return ErrorCode::Fail;
+        if (m_index == nullptr) {
+            std::shared_ptr<VectorIndex> tmpIndex;
+            if (LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, tmpIndex) != ErrorCode::Success) {
+                LOG(Helper::LogLevel::LL_Error, "Cannot load head index from %s!\n", (m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder).c_str());
+                return ErrorCode::Fail;
+            } else {
+                m_index = std::dynamic_pointer_cast<BKT::Index<T>>(tmpIndex);
+            }
         }
         if (!CheckHeadIndexType())
             return ErrorCode::Fail;
 
-        m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads));
-        m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck));
-        m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp));
+        m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads).c_str());
+        m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck).c_str());
+        m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp).c_str());
         m_index->UpdateIndex();
 
         if (m_options.m_inPlace) {
@@ -822,9 +830,9 @@ ErrorCode Index<T>::BuildIndex(bool p_normalized) {
 template <typename T>
 ErrorCode Index<T>::UpdateIndex() {
     omp_set_num_threads(m_options.m_iSSDNumberOfThreads);
-    m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads));
-    // m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck));
-    // m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp));
+    m_index->SetParameter("NumberOfThreads", std::to_string(m_options.m_iSSDNumberOfThreads).c_str());
+    // m_index->SetParameter("MaxCheck", std::to_string(m_options.m_maxCheck).c_str());
+    // m_index->SetParameter("HashTableExponent", std::to_string(m_options.m_hashExp).c_str());
     m_index->UpdateIndex();
     return ErrorCode::Success;
 }

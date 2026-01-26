@@ -68,7 +68,7 @@ target_include_directories(ExtraSPDKControllerTest PRIVATE
 add_test(NAME ExtraSPDKControllerTest COMMAND ExtraSPDKControllerTest)
 set_property(TEST ExtraSPDKControllerTest PROPERTY ENVIRONMENT_MODIFICATION
     "LD_LIBRARY_PATH=set:/usr/local/lib"
-    "SPFRESH_SPDK_CONF=set:${CMAKE_CURRENT_SOURCE_DIR}/script/bdev-user.json"
+    "SPFRESH_SPDK_CONF=set:${CMAKE_CURRENT_SOURCE_DIR}/script/bdev-uring.json"
     "SPFRESH_SPDK_BDEV=set:Uring0"
     "DPDK_IOVA_MODE=set:va"
 )

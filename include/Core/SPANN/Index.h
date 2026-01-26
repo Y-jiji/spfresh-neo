@@ -6,6 +6,7 @@
 
 #include "Core/Common.h"
 #include "Core/VectorIndex.h"
+#include "Core/BKT/Index.h"
 
 #include "Utils/CommonUtils.h"
 #include "Utils/DistanceUtils.h"
@@ -21,7 +22,7 @@
 #include "Helper/ConcurrentSet.h"
 #include "Helper/VectorSetReader.h"
 
-#include "IExtraSearcher.h"
+#include "ExtraDynamicSearcher.h"
 #include "Options.h"
 
 #include <functional>
@@ -31,11 +32,11 @@ namespace SPTAG::SPANN {
 template <typename T>
 class Index : public VectorIndex {
    private:
-    std::shared_ptr<VectorIndex> m_index;
+    std::shared_ptr<BKT::Index<T>> m_index;
     std::shared_ptr<std::uint64_t> m_vectorTranslateMap;
     std::unordered_map<std::string, std::string> m_headParameters;
 
-    std::shared_ptr<IExtraSearcher> m_extraSearcher;
+    std::shared_ptr<ExtraDynamicSearcher<T>> m_extraSearcher;
 
     Options m_options;
 
@@ -59,7 +60,7 @@ class Index : public VectorIndex {
     inline std::shared_ptr<VectorIndex> GetMemoryIndex() {
         return m_index;
     }
-    inline std::shared_ptr<IExtraSearcher> GetDiskIndex() {
+    inline std::shared_ptr<ExtraDynamicSearcher<T>> GetDiskIndex() {
         return m_extraSearcher;
     }
     inline Options* GetOptions() {
