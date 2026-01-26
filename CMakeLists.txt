@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.29)
 project(SPFresh LANGUAGES CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+enable_testing()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PkgConfig REQUIRED)
 find_package(Boost REQUIRED CONFIG)
@@ -60,3 +61,11 @@ target_include_directories(ssdserving PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+
+add_executable(BKTSerializationTest unittest/BKTSerializationTest.cpp)
+target_link_libraries(BKTSerializationTest PRIVATE SPTAGLib)
+target_include_directories(BKTSerializationTest PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+add_test(NAME BKTSerializationTest COMMAND BKTSerializationTest)
