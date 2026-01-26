@@ -90,20 +90,19 @@ bool TestBKTSerialization() {
     std::cout << "  Index saved successfully" << std::endl;
 
     std::cout << "  Loading index from " << testDir << "..." << std::endl;
-    std::shared_ptr<VectorIndex> loadedIndexBase;
-    ret = VectorIndex::LoadIndex(testDir, loadedIndexBase);
+    std::shared_ptr<BKT::Index<T>> loadedIndex;
+    ret = BKT::Index<T>::LoadIndex(testDir, loadedIndex);
     if (ret != ErrorCode::Success) {
         std::cerr << "Failed to load index, error code: " << static_cast<int>(ret) << std::endl;
         return false;
     }
 
     std::cout << "  Index loaded successfully" << std::endl;
-    std::cout << "    Number of samples: " << loadedIndexBase->GetNumSamples() << std::endl;
-    std::cout << "    Feature dimension: " << loadedIndexBase->GetFeatureDim() << std::endl;
+    std::cout << "    Number of samples: " << loadedIndex->GetNumSamples() << std::endl;
+    std::cout << "    Feature dimension: " << loadedIndex->GetFeatureDim() << std::endl;
 
-    auto loadedIndex = std::dynamic_pointer_cast<BKT::Index<T>>(loadedIndexBase);
     if (!loadedIndex) {
-        std::cerr << "Failed to cast loaded index to BKT::Index" << std::endl;
+        std::cerr << "Failed to load index" << std::endl;
         return false;
     }
 

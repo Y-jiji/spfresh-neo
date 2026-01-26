@@ -753,6 +753,63 @@ Index<T>::GetParameter(const char* p_param, const char* p_section) const {
     return std::string();
 }
 
+template <typename T>
+SPTAG::ErrorCode
+Index<T>::LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<Index<T>>& p_index) {
+    std::string folderPath(p_loaderFilePath);
+    if (!folderPath.empty() && *(folderPath.rbegin()) != FolderSep)
+        folderPath += FolderSep;
+
+    Helper::IniReader iniReader;
+    {
+        auto fp = f_createIO();
+        if (fp == nullptr || !fp->Initialize((folderPath + "indexloader.ini").c_str(), std::ios::in))
+            return ErrorCode::FailedOpenFile;
+        if (ErrorCode::Success != iniReader.LoadIni(fp))
+            return ErrorCode::FailedParseValue;
+    }
+
+    p_index.reset(new Index<T>());
+
+    ErrorCode ret = ErrorCode::Success;
+    if ((ret = p_index->LoadIndexConfig(iniReader)) != ErrorCode::Success)
+        return ret;
+
+    std::shared_ptr<std::vector<std::string>> indexfiles = p_index->GetIndexFiles();
+    if (iniReader.DoesSectionExist("MetaData")) {
+        indexfiles->push_back(p_index->m_metadataManager.GetMetadataFile());
+        indexfiles->push_back(p_index->m_metadataManager.GetMetadataIndexFile());
+    }
+    std::vector<std::shared_ptr<Helper::DiskIO>> handles;
+    for (std::string& f : *indexfiles) {
+        auto ptr = f_createIO();
+        if (ptr == nullptr || !ptr->Initialize((folderPath + f).c_str(), std::ios::binary | std::ios::in)) {
+            LOG(Helper::LogLevel::LL_Error, "Cannot open file %s!\n", (folderPath + f).c_str());
+            ptr = nullptr;
+        }
+        handles.push_back(std::move(ptr));
+    }
+
+    if ((ret = p_index->LoadIndexData(handles)) != ErrorCode::Success)
+        return ret;
+
+    size_t metaStart = p_index->GetIndexFiles()->size();
+    if (iniReader.DoesSectionExist("MetaData")) {
+        p_index->SetMetadata(new SPTAG::MemMetadataSet(handles[metaStart], handles[metaStart + 1], p_index->m_iDataBlockSize, p_index->m_iDataCapacity, p_index->m_iMetaRecordSize));
+
+        if (!(p_index->GetMetadata()->Available())) {
+            LOG(Helper::LogLevel::LL_Error, "Error: Failed to load metadata.\n");
+            return ErrorCode::Fail;
+        }
+
+        if (iniReader.GetParameter("MetaData", "MetaDataToVectorIndex", std::string()) == "true") {
+            p_index->BuildMetaMapping();
+        }
+    }
+    p_index->m_bReady = true;
+    return ErrorCode::Success;
+}
+
 std::uint64_t EstimatedVectorCount(std::uint64_t p_memory, DimensionType p_dimension, VectorValueType p_valuetype, SizeType p_vectorsInBlock, SizeType p_maxmeta, int p_treeNumber, int p_neighborhoodSize) {
     size_t treeNodeSize = sizeof(SizeType) * 3;
     std::uint64_t unit = GetValueTypeSize(p_valuetype) * p_dimension + p_maxmeta + sizeof(std::uint64_t) + sizeof(SizeType) * p_neighborhoodSize + 1 + treeNodeSize * p_treeNumber;

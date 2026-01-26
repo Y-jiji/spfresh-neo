@@ -1041,34 +1041,21 @@ void UpdateSPFresh(SPANN::Index<ValueType>* p_index) {
     }
 }
 
+template <typename T>
 int UpdateTest(const char* storePath) {
-    std::shared_ptr<SPTAG::VectorIndex> index;
+    std::shared_ptr<SPANN::Index<T>> index;
 
-    if (index->LoadIndex(storePath, index) != SPTAG::ErrorCode::Success) {
+    if (SPANN::Index<T>::LoadIndex(storePath, index) != SPTAG::ErrorCode::Success) {
         LOG(Helper::LogLevel::LL_Error, "Failed to load index.\n");
         return 1;
     }
 
-    SPANN::Options* opts = nullptr;
+    SPANN::Options* opts = index->GetOptions();
 
-#define DefineVectorValueType(Name, Type)                              \
-    if (index->GetVectorValueType() == SPTAG::VectorValueType::Name) { \
-        opts = ((SPANN::Index<Type>*)index.get())->GetOptions();       \
-    }
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
-
-#define DefineVectorValueType(Name, Type)                           \
-    if (opts->m_valueType == SPTAG::VectorValueType::Name) {        \
-        if (opts->m_steadyState)                                    \
-            SteadyStateSPFresh((SPANN::Index<Type>*)(index.get())); \
-        else                                                        \
-            UpdateSPFresh((SPANN::Index<Type>*)(index.get()));      \
-    }
-
-#include "Core/DefinitionList.h"
-#undef DefineVectorValueType
+    if (opts->m_steadyState)
+        SteadyStateSPFresh(index.get());
+    else
+        UpdateSPFresh(index.get());
 
     return 0;
 }
@@ -1076,10 +1063,27 @@ int UpdateTest(const char* storePath) {
 }  // namespace SPTAG::SSDServing::SPFresh
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error, "spfresh storePath\n");
+    if (argc < 3) {
+        SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error, "spfresh storePath valueType\n");
+        SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error, "valueType: Float, Int8, Int16, UInt8\n");
         exit(-1);
     }
-    auto ret = SPTAG::SSDServing::SPFresh::UpdateTest(argv[1]);
+
+    std::string valueType(argv[2]);
+    int ret;
+
+    if (valueType == "Float") {
+        ret = SPTAG::SSDServing::SPFresh::UpdateTest<float>(argv[1]);
+    } else if (valueType == "Int8") {
+        ret = SPTAG::SSDServing::SPFresh::UpdateTest<int8_t>(argv[1]);
+    } else if (valueType == "Int16") {
+        ret = SPTAG::SSDServing::SPFresh::UpdateTest<int16_t>(argv[1]);
+    } else if (valueType == "UInt8") {
+        ret = SPTAG::SSDServing::SPFresh::UpdateTest<uint8_t>(argv[1]);
+    } else {
+        SPTAG::LOG(SPTAG::Helper::LogLevel::LL_Error, "Unsupported value type: %s\n", valueType.c_str());
+        exit(-1);
+    }
+
     return ret;
 }

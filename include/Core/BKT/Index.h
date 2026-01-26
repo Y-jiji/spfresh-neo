@@ -169,6 +169,8 @@ class Index : public VectorIndex {
     ErrorCode LoadIndexData(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams);
     ErrorCode LoadIndexDataFromMemory(const std::vector<ByteArray>& p_indexBlobs);
 
+    static ErrorCode LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<Index<T>>& p_index);
+
     ErrorCode BuildIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, bool p_normalized = false, bool p_shareOwnership = false);
     ErrorCode SearchIndex(QueryResult& p_query, bool p_searchDeleted = false) const;
     ErrorCode RefineSearchIndex(QueryResult& p_query, bool p_searchDeleted = false) const;

@@ -105,18 +105,6 @@ class VectorIndex {
     virtual MetadataSet* GetMetadata() const;
     virtual void SetMetadata(MetadataSet* p_new);
 
-    virtual std::string GetIndexName() const {
-        std::string name = m_metadataManager.GetIndexName();
-        if (name == "")
-            return Helper::Convert::ConvertToString(GetIndexAlgoType());
-        return name;
-    }
-    virtual void SetIndexName(std::string p_name) {
-        m_metadataManager.SetIndexName(p_name);
-    }
-
-    static ErrorCode LoadIndex(const std::string& p_loaderFilePath, std::shared_ptr<VectorIndex>& p_vectorIndex);
-
     static ErrorCode LoadIndexFromFile(const std::string& p_file, std::shared_ptr<VectorIndex>& p_vectorIndex);
 
     static ErrorCode LoadIndex(const std::string& p_config, const std::vector<ByteArray>& p_indexBlobs, std::shared_ptr<VectorIndex>& p_vectorIndex);
@@ -153,12 +141,10 @@ class VectorIndex {
 
     void BuildMetaMapping(bool p_checkDeleted = true);
 
-   private:
+   protected:
     ErrorCode LoadIndexConfig(Helper::IniReader& p_reader);
 
     ErrorCode SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut);
-
-   protected:
     bool m_bReady = false;
     std::shared_ptr<MetadataSet> m_pMetadata;
     MetaDataManager m_metadataManager;

@@ -710,11 +710,11 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
             }
         }
         m_index.reset();
-        std::shared_ptr<VectorIndex> tmpIndex;
-        if (LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, tmpIndex) != ErrorCode::Success) {
+        std::shared_ptr<BKT::Index<T>> tmpIndex;
+        if (BKT::Index<T>::LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, tmpIndex) != ErrorCode::Success) {
             LOG(Helper::LogLevel::LL_Error, "Cannot load head index from %s!\n", (m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder).c_str());
         } else {
-            m_index = std::dynamic_pointer_cast<BKT::Index<T>>(tmpIndex);
+            m_index = tmpIndex;
         }
     }
     auto t3 = std::chrono::high_resolution_clock::now();
@@ -725,12 +725,12 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
         omp_set_num_threads(m_options.m_iSSDNumberOfThreads);
 
         if (m_index == nullptr) {
-            std::shared_ptr<VectorIndex> tmpIndex;
-            if (LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, tmpIndex) != ErrorCode::Success) {
+            std::shared_ptr<BKT::Index<T>> tmpIndex;
+            if (BKT::Index<T>::LoadIndex(m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder, tmpIndex) != ErrorCode::Success) {
                 LOG(Helper::LogLevel::LL_Error, "Cannot load head index from %s!\n", (m_options.m_indexDirectory + FolderSep + m_options.m_headIndexFolder).c_str());
                 return ErrorCode::Fail;
             } else {
-                m_index = std::dynamic_pointer_cast<BKT::Index<T>>(tmpIndex);
+                m_index = tmpIndex;
             }
         }
         if (!CheckHeadIndexType())
