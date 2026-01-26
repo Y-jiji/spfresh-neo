@@ -11,6 +11,7 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
+#include <iostream>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_hash_map.h>
 
@@ -177,7 +178,8 @@ class SPDKIO {
     ErrorCode Get(SizeType key, std::string* value) {
         if (key >= m_pBlockMapping.R())
             return ErrorCode::Fail;
-
+        // DEBUG std::cout << "KEY: " << key << "AT: " << At(key) << std::endl;
+        if (At(key) == 0xffffffffffffffff) return ErrorCode::Fail;
         if (m_pBlockController.ReadBlocks((AddressType*)At(key), value))
             return ErrorCode::Success;
         return ErrorCode::Fail;

@@ -116,6 +116,15 @@ void* SPDKIO::BlockController::InitializeSpdk(void* arg) {
     if (spdkIoDepth)
         ctrl->m_ssdSpdkIoDepth = atoi(spdkIoDepth);
 
+    // Configure IOVA mode from environment variable
+    // Use "va" for virtual addresses (no root required)
+    // Use "pa" for physical addresses (requires capabilities or root)
+    const char* iovaMode = getenv("DPDK_IOVA_MODE");
+    if (iovaMode) {
+        opts.iova_mode = iovaMode;
+        fprintf(stdout, "SPDKIO::BlockController::InitializeSpdk: Using IOVA mode '%s' from DPDK_IOVA_MODE\n", iovaMode);
+    }
+
     int rc;
     rc = spdk_app_start(&opts, &SPTAG::SPANN::SPDKIO::BlockController::SpdkStart, arg);
     if (rc) {

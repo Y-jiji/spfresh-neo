@@ -10,11 +10,8 @@ find_package(TBB REQUIRED CONFIG)
 find_package(OpenMP REQUIRED)
 
 set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-pkg_check_modules(SPDK_NVME     REQUIRED IMPORTED_TARGET spdk_nvme)
-pkg_check_modules(SPDK_ENV_DPDK REQUIRED IMPORTED_TARGET spdk_env_dpdk)
-pkg_check_modules(SPDK_BDEV     REQUIRED IMPORTED_TARGET spdk_bdev)
-pkg_check_modules(SPDK_EVENT    REQUIRED IMPORTED_TARGET spdk_event)
-pkg_check_modules(ZSTD          REQUIRED IMPORTED_TARGET libzstd)
+pkg_check_modules(SPDK REQUIRED IMPORTED_TARGET spdk_nvme spdk_env_dpdk spdk_bdev spdk_event spdk_bdev_uring spdk_bdev_nvme spdk_event_bdev spdk_event_accel spdk_event_sock spdk_event_iobuf)
+pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 
 file(GLOB UTIL_HDR_FILES include/Utils/*.h)
 file(GLOB UTIL_FILES src/Utils/*.cpp)
@@ -34,10 +31,7 @@ target_include_directories(SPTAGLib PRIVATE
 )
 target_link_libraries(SPTAGLib PUBLIC
     DistanceUtils tbb
-    PkgConfig::SPDK_NVME
-    PkgConfig::SPDK_ENV_DPDK
-    PkgConfig::SPDK_BDEV
-    PkgConfig::SPDK_EVENT
+    PkgConfig::SPDK
     PkgConfig::ZSTD
     uring isal isal_crypto numa OpenMP::OpenMP_CXX
 )
@@ -78,4 +72,9 @@ target_include_directories(ExtraSPDKControllerTest PRIVATE
     $<INSTALL_INTERFACE:include>
 )
 add_test(NAME ExtraSPDKControllerTest COMMAND ExtraSPDKControllerTest)
-set_tests_properties(ExtraSPDKControllerTest PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=/usr/local/lib;SPFRESH_SPDK_CONF=${CMAKE_CURRENT_SOURCE_DIR}/script/bdev-user.json;SPFRESH_SPDK_BDEV=Uring0")
+set_property(TEST ExtraSPDKControllerTest PROPERTY ENVIRONMENT_MODIFICATION
+    "LD_LIBRARY_PATH=set:/usr/local/lib"
+    "SPFRESH_SPDK_CONF=set:${CMAKE_CURRENT_SOURCE_DIR}/script/bdev-user.json"
+    "SPFRESH_SPDK_BDEV=set:Uring0"
+    "DPDK_IOVA_MODE=set:va"
+)

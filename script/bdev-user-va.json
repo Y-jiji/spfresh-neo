@@ -8,7 +8,7 @@
           "params": {
             "name": "Uring0",
             "filename": "/dev/sda",
-            "block_size": 512
+            "block_size": 4096
           }
         }
       ]
