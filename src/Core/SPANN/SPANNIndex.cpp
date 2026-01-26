@@ -3,7 +3,7 @@
 
 #include "Core/SPANN/Index.h"
 #include "Core/BKT/Index.h"
-#include "Helper/VectorSetReaders/MemoryReader.h"
+
 #include "Core/SPANN/ExtraStaticSearcher.h"
 #include "Core/SPANN/ExtraDynamicSearcher.h"
 #include <shared_mutex>
@@ -795,6 +795,12 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
 }
 
 template <typename T>
+ErrorCode Index<T>::BuildIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, bool p_normalized, bool p_shareOwnership) {
+    LOG(Helper::LogLevel::LL_Error, "BuildIndex from memory pointer is not supported. Use BuildIndex(bool) with file path instead.\n");
+    return ErrorCode::Fail;
+}
+
+template <typename T>
 ErrorCode Index<T>::BuildIndex(bool p_normalized) {
     SPTAG::VectorValueType valueType = m_options.m_valueType;
     SizeType dim = m_options.m_dim;
@@ -810,32 +816,6 @@ ErrorCode Index<T>::BuildIndex(bool p_normalized) {
         m_options.m_vectorSize = vectorReader->GetVectorSet()->Count();
     }
 
-    return BuildIndexInternal(vectorReader);
-}
-
-template <typename T>
-ErrorCode Index<T>::BuildIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, bool p_normalized, bool p_shareOwnership) {
-    if (p_data == nullptr || p_vectorNum == 0 || p_dimension == 0)
-        return ErrorCode::EmptyData;
-
-    std::shared_ptr<VectorSet> vectorSet;
-    if (p_shareOwnership) {
-        vectorSet.reset(new BasicVectorSet(ByteArray((std::uint8_t*)p_data, sizeof(T) * p_vectorNum * p_dimension, false), GetEnumValueType<T>(), p_dimension, p_vectorNum));
-    } else {
-        ByteArray arr = ByteArray::Alloc(sizeof(T) * p_vectorNum * p_dimension);
-        memcpy(arr.Data(), p_data, sizeof(T) * p_vectorNum * p_dimension);
-        vectorSet.reset(new BasicVectorSet(arr, GetEnumValueType<T>(), p_dimension, p_vectorNum));
-    }
-
-    if (m_options.m_distCalcMethod == DistCalcMethod::Cosine && !p_normalized) {
-        vectorSet->Normalize(m_options.m_iSSDNumberOfThreads);
-    }
-    SPTAG::VectorValueType valueType = m_options.m_valueType;
-    std::shared_ptr<Helper::VectorSetReader> vectorReader(new Helper::MemoryVectorReader(std::make_shared<Helper::ReaderOptions>(valueType, p_dimension, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads, true), vectorSet));
-
-    m_options.m_valueType = GetEnumValueType<T>();
-    m_options.m_dim = p_dimension;
-    m_options.m_vectorSize = p_vectorNum;
     return BuildIndexInternal(vectorReader);
 }
 
