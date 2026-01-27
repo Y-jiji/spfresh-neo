@@ -98,6 +98,12 @@ extern std::shared_ptr<Helper::DiskIO> (*f_createIO)();
 
 extern std::shared_ptr<Helper::Logger> g_pLogger;
 
+class IAbortOperation {
+   public:
+    virtual ~IAbortOperation() {}
+    virtual bool ShouldAbort() = 0;
+};
+
 #define LOG(l, ...) g_pLogger->Logging("SPTAG", l, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
 class MyException : public std::exception {

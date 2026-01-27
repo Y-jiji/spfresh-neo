@@ -5,6 +5,8 @@
 #define _SPTAG_SEARCHRESULT_H_
 
 #include "CommonDataStructure.h"
+#include <vector>
+#include <algorithm>
 
 namespace SPTAG {
 struct NodeDistPair {
@@ -50,6 +52,11 @@ struct EdgeCompare {
         return a.node < b.node;
     };
 };
+
+inline void SortSelections(std::vector<Edge>* selections) {
+    EdgeCompare edgeComparer;
+    std::sort(selections->begin(), selections->end(), edgeComparer);
+}
 
 struct BasicResult {
     SizeType VID;

@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 #include "Core/Common/TruthSet.h"
-#include "Core/VectorIndex.h"
 #include "Core/Common/QueryResultSet.h"
 
 #if defined(GPU)

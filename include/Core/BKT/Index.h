@@ -5,7 +5,10 @@
 #define _SPTAG_BKT_INDEX_H_
 
 #include "Core/Common.h"
-#include "Core/VectorIndex.h"
+#include "Core/SearchQuery.h"
+#include "Core/VectorSet.h"
+#include "Core/MetadataSet.h"
+#include "Core/MetaDataManager.h"
 
 #include "Utils/CommonUtils.h"
 #include "Utils/DistanceUtils.h"
@@ -30,7 +33,7 @@ class IniReader;
 namespace SPTAG::BKT {
 
 template <typename T>
-class Index : public VectorIndex {
+class Index {
     class RebuildJob : public Helper::ThreadPool::Job {
        public:
         RebuildJob(COMMON::Dataset<T>* p_data, COMMON::BKTree* p_tree, COMMON::RelativeNeighborhoodGraph* p_graph, DistCalcMethod p_distMethod) : m_data(p_data), m_tree(p_tree), p_graph(p_graph), m_distMethod(p_distMethod) {}
@@ -44,6 +47,25 @@ class Index : public VectorIndex {
         COMMON::RelativeNeighborhoodGraph* p_graph;
         DistCalcMethod m_distMethod;
     };
+
+   protected:
+    bool m_bReady = false;
+    std::shared_ptr<MetadataSet> m_pMetadata;
+    MetaDataManager m_metadataManager;
+
+    ErrorCode LoadIndexConfig(Helper::IniReader& p_reader);
+
+    ErrorCode SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut);
+
+    inline bool HasMetaMapping() const {
+        return m_metadataManager.HasMetaMapping();
+    }
+
+    inline SizeType GetMetaMapping(std::string& meta) const;
+
+    void UpdateMetaMapping(const std::string& meta, SizeType i);
+
+    void BuildMetaMapping(bool p_checkDeleted = true);
 
    private:
     // data points
@@ -82,7 +104,10 @@ class Index : public VectorIndex {
    public:
     static thread_local std::shared_ptr<COMMON::WorkSpace> m_workspace;
 
-   public:
+    int m_iDataBlockSize = 1024 * 1024;
+    int m_iDataCapacity = MaxSize;
+    int m_iMetaRecordSize = 10;
+
     Index() {
 #define DefineBKTParameter(VarName, VarType, DefaultValue, RepresentStr) \
     VarName = DefaultValue;
@@ -162,6 +187,46 @@ class Index : public VectorIndex {
         return std::move(files);
     }
 
+    bool IsReady() const {
+        return m_bReady;
+    }
+    void SetReady(bool p_ready) {
+        m_bReady = p_ready;
+    }
+
+    std::shared_ptr<std::vector<std::uint64_t>> CalculateBufferSize() const;
+
+    ErrorCode SaveIndex(std::string& p_config, const std::vector<ByteArray>& p_indexBlobs);
+
+    ErrorCode SaveIndex(const std::string& p_folderPath);
+
+    ErrorCode SaveIndexToFile(const std::string& p_file, IAbortOperation* p_abort = nullptr);
+
+    ErrorCode BuildIndex(std::shared_ptr<VectorSet> p_vectorSet, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false, bool p_shareOwnership = false);
+
+    ErrorCode BuildIndex(bool p_normalized = false) {
+        return ErrorCode::Undefined;
+    }
+
+    ErrorCode AddIndex(std::shared_ptr<VectorSet> p_vectorSet, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false);
+
+    ErrorCode DeleteIndex(ByteArray p_meta);
+
+    const void* GetSample(ByteArray p_meta, bool& deleteFlag);
+
+    ErrorCode SearchIndex(const void* p_vector, int p_vectorCount, int p_neighborCount, bool p_withMeta, BasicResult* p_results) const;
+
+    void ApproximateRNG(std::shared_ptr<VectorSet>& fullVectors, std::unordered_set<SizeType>& exceptIDS, int candidateNum, Edge* selections, int replicaCount, int numThreads, int numTrees, int leafSize, float RNGFactor, int numGPUs);
+
+    static void SortSelections(std::vector<Edge>* selections);
+
+    std::string GetParameter(const std::string& p_param, const std::string& p_section = "Index") const;
+    ErrorCode SetParameter(const std::string& p_param, const std::string& p_value, const std::string& p_section = "Index");
+
+    ByteArray GetMetadata(SizeType p_vectorID) const;
+    MetadataSet* GetMetadata() const;
+    void SetMetadata(MetadataSet* p_new);
+
     ErrorCode SaveConfig(std::shared_ptr<Helper::DiskIO> p_configout);
     ErrorCode SaveIndexData(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams);
 
@@ -187,7 +252,9 @@ class Index : public VectorIndex {
     ErrorCode UpdateIndex();
 
     ErrorCode RefineIndex(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams, IAbortOperation* p_abort);
-    ErrorCode RefineIndex(std::shared_ptr<VectorIndex>& p_newIndex);
+    ErrorCode RefineIndex(std::shared_ptr<Index<T>>& p_newIndex);
+
+    ErrorCode MergeIndex(Index<T>* p_addindex, int p_threadnum, IAbortOperation* p_abort);
 
    private:
     void SearchIndex(COMMON::QueryResultSet<T>& p_query, COMMON::WorkSpace& p_space, bool p_searchDeleted, bool p_searchDuplicated, std::function<bool(const ByteArray&)> filterFunc = nullptr) const;

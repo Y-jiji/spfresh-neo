@@ -4,7 +4,7 @@
 #ifndef _SPTAG_COMMON_TRUTHSET_H_
 #define _SPTAG_COMMON_TRUTHSET_H_
 
-#include "Core/VectorIndex.h"
+#include "Core/BKT/Index.h"
 #include "QueryResultSet.h"
 
 namespace SPTAG::COMMON {
@@ -137,7 +137,7 @@ class TruthSet {
     }
 
     template <typename T>
-    static float CalculateRecall(VectorIndex* index, std::vector<QueryResult>& results, const std::vector<std::set<SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false, float* MRR = nullptr) {
+    static float CalculateRecall(BKT::Index<T>* index, std::vector<QueryResult>& results, const std::vector<std::set<SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false, float* MRR = nullptr) {
         float meanrecall = 0, minrecall = MaxDist, maxrecall = 0, stdrecall = 0, meanmrr = 0;
         std::vector<float> thisrecall(NumQuerys, 0);
         std::unique_ptr<bool[]> visited(new bool[K]);
@@ -212,7 +212,7 @@ class TruthSet {
     }
 
     template <typename T>
-    static float CalculateRecall(VectorIndex* index, T* query, int K) {
+    static float CalculateRecall(BKT::Index<T>* index, T* query, int K) {
         COMMON::QueryResultSet<void> sampleANN(query, K);
         COMMON::QueryResultSet<void> sampleTruth(query, K);
 

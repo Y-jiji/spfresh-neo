@@ -4,8 +4,6 @@
 #ifndef _SPTAG_COMMON_RNG_H_
 #define _SPTAG_COMMON_RNG_H_
 
-#include "Core/VectorIndex.h"
-
 #include "Utils/CommonUtils.h"
 #include "Dataset.h"
 #include "FineGrainedLock.h"
@@ -14,6 +12,13 @@
 #include <chrono>
 #include <queue>
 #include <atomic>
+
+namespace SPTAG {
+namespace BKT {
+template <typename T>
+class Index;
+}
+}  // namespace SPTAG::BKT
 
 #if defined(GPU)
     #include <cuda.h>
@@ -53,7 +58,8 @@ class RelativeNeighborhoodGraph {
 
     ~RelativeNeighborhoodGraph() {}
 
-    void InsertNeighbors(VectorIndex* index, const SizeType node, SizeType insertNode, float insertDist) {
+    template <typename T>
+    void InsertNeighbors(BKT::Index<T>* index, const SizeType node, SizeType insertNode, float insertDist) {
         SizeType* nodes = m_pNeighborhoodGraph[node];
         const void* nodeVec = index->GetSample(node);
         const void* insertVec = index->GetSample(insertNode);
@@ -98,7 +104,8 @@ class RelativeNeighborhoodGraph {
         }
     }
 
-    void RebuildNeighbors(VectorIndex* index, const SizeType node, SizeType* nodes, const BasicResult* queryResults, const int numResults) {
+    template <typename T>
+    void RebuildNeighbors(BKT::Index<T>* index, const SizeType node, SizeType* nodes, const BasicResult* queryResults, const int numResults) {
         DimensionType count = 0;
         for (int j = 0; j < numResults && count < m_iNeighborhoodSize; j++) {
             const BasicResult& item = queryResults[j];
@@ -121,7 +128,8 @@ class RelativeNeighborhoodGraph {
             nodes[j] = -1;
     }
 
-    float GraphAccuracyEstimation(VectorIndex* index, const SizeType samples, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
+    template <typename T>
+    float GraphAccuracyEstimation(BKT::Index<T>* index, const SizeType samples, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
         DimensionType* correct = new DimensionType[samples];
 
 #pragma omp parallel for schedule(dynamic)
@@ -163,7 +171,7 @@ class RelativeNeighborhoodGraph {
 
 #if defined(GPU)
     template <typename T>
-    void BuildInitKNNGraph(VectorIndex* index, const std::unordered_map<SizeType, SizeType>* idmap) {
+    void BuildInitKNNGraph(BKT::Index<T>* index, const std::unordered_map<SizeType, SizeType>* idmap) {
         SizeType initSize;
         SPTAG::Helper::Convert::ConvertStringTo(index->GetParameter("NumberOfInitialDynamicPivots").c_str(), initSize);
 
@@ -182,12 +190,12 @@ class RelativeNeighborhoodGraph {
     }
 #else
     template <typename T>
-    void PartitionByTptree(VectorIndex* index, std::vector<SizeType>& indices, const SizeType first, const SizeType last, std::vector<std::pair<SizeType, SizeType> >& leaves) {
+    void PartitionByTptree(BKT::Index<T>* index, std::vector<SizeType>& indices, const SizeType first, const SizeType last, std::vector<std::pair<SizeType, SizeType> >& leaves) {
         PartitionByTptreeCore<T, T>(index, indices, first, last, leaves);
     }
 
     template <typename T, typename R>
-    void PartitionByTptreeCore(VectorIndex* index, std::vector<SizeType>& indices, const SizeType first, const SizeType last, std::vector<std::pair<SizeType, SizeType> >& leaves) {
+    void PartitionByTptreeCore(BKT::Index<T>* index, std::vector<SizeType>& indices, const SizeType first, const SizeType last, std::vector<std::pair<SizeType, SizeType> >& leaves) {
         if (last - first <= m_iTPTLeafSize) {
             leaves.emplace_back(first, last);
         } else {
@@ -200,7 +208,6 @@ class RelativeNeighborhoodGraph {
                 SizeType cols = index->GetFeatureDim();
 
                 std::vector<float> Mean(cols, 0);
-                // calculate the mean of each dimension
                 for (SizeType j = first; j <= end; j++) {
                     R* v = (R*)index->GetSample(indices[j]);
                     for (DimensionType k = 0; k < cols; k++) {
@@ -215,7 +222,6 @@ class RelativeNeighborhoodGraph {
                     Variance.emplace_back(j, 0.0f);
                 }
 
-                // calculate the variance of each dimension
                 for (SizeType j = first; j <= end; j++) {
                     R* v = (R*)index->GetSample(indices[j]);
                     for (DimensionType k = 0; k < cols; k++) {
@@ -271,7 +277,6 @@ class RelativeNeighborhoodGraph {
                 }
                 SizeType i = first;
                 SizeType j = last;
-                // decide which child one point belongs
                 while (i <= j) {
                     float val = 0;
                     R* v = (R*)index->GetSample(indices[i]);
@@ -285,7 +290,6 @@ class RelativeNeighborhoodGraph {
                         j--;
                     }
                 }
-                // if all the points in the node are equal,equally split the node into 2
                 if ((i == first) || (i == last + 1)) {
                     i = (first + last + 1) / 2;
                 }
@@ -305,7 +309,7 @@ class RelativeNeighborhoodGraph {
     }
 
     template <typename T>
-    void BuildInitKNNGraph(VectorIndex* index, const std::unordered_map<SizeType, SizeType>* idmap) {
+    void BuildInitKNNGraph(BKT::Index<T>* index, const std::unordered_map<SizeType, SizeType>* idmap) {
         COMMON::Dataset<float> NeighborhoodDists(m_iGraphSize, m_iNeighborhoodSize, index->m_iDataBlockSize, index->m_iDataCapacity);
         std::vector<std::vector<SizeType> > TptreeDataIndices(m_iTPTNumber, std::vector<SizeType>(m_iGraphSize));
         std::vector<std::vector<std::pair<SizeType, SizeType> > > TptreeLeafNodes(m_iTPTNumber, std::vector<std::pair<SizeType, SizeType> >());
@@ -363,7 +367,7 @@ class RelativeNeighborhoodGraph {
 #endif
 
     template <typename T>
-    void BuildGraph(VectorIndex* index, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
+    void BuildGraph(BKT::Index<T>* index, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
         LOG(Helper::LogLevel::LL_Info, "build RNG graph!\n");
 
         m_iGraphSize = index->GetNumSamples();
@@ -402,7 +406,7 @@ class RelativeNeighborhoodGraph {
     }
 
     template <typename T>
-    void RebuildGraph(VectorIndex* index, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
+    void RebuildGraph(BKT::Index<T>* index, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
         std::vector<int> indegree(m_iGraphSize);
 
 #pragma omp parallel for schedule(dynamic)
@@ -459,7 +463,7 @@ class RelativeNeighborhoodGraph {
     }
 
     template <typename T>
-    void RefineGraph(VectorIndex* index, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
+    void RefineGraph(BKT::Index<T>* index, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
         for (int iter = 0; iter < m_iRefineIter - 1; iter++) {
             auto t1 = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for schedule(dynamic)
@@ -490,7 +494,7 @@ class RelativeNeighborhoodGraph {
     }
 
     template <typename T>
-    ErrorCode RefineGraph(VectorIndex* index, std::vector<SizeType>& indices, std::vector<SizeType>& reverseIndices, std::shared_ptr<Helper::DiskIO> output, RelativeNeighborhoodGraph* newGraph, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
+    ErrorCode RefineGraph(BKT::Index<T>* index, std::vector<SizeType>& indices, std::vector<SizeType>& reverseIndices, std::shared_ptr<Helper::DiskIO> output, RelativeNeighborhoodGraph* newGraph, const std::unordered_map<SizeType, SizeType>* idmap = nullptr) {
         std::shared_ptr<RelativeNeighborhoodGraph> tmp;
         if (newGraph == nullptr) {
             tmp.reset(new RelativeNeighborhoodGraph);
@@ -530,7 +534,7 @@ class RelativeNeighborhoodGraph {
     }
 
     template <typename T>
-    void RefineNode(VectorIndex* index, const SizeType node, bool updateNeighbors, bool searchDeleted, int CEF) {
+    void RefineNode(BKT::Index<T>* index, const SizeType node, bool updateNeighbors, bool searchDeleted, int CEF) {
         COMMON::QueryResultSet<T> query((const T*)index->GetSample(node), CEF + 1);
         index->RefineSearchIndex(query, searchDeleted);
         RebuildNeighbors(index, node, m_pNeighborhoodGraph[node], query.GetResults(), CEF + 1);

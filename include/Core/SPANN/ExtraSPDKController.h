@@ -5,7 +5,6 @@
 #define _SPTAG_SPANN_EXTRASPDKCONTROLLER_H_
 
 #include "Core/Common/Dataset.h"
-#include "Core/VectorIndex.h"
 #include "Helper/ThreadPool.h"
 #include <cstdlib>
 #include <memory>
@@ -179,7 +178,8 @@ class SPDKIO {
         if (key >= m_pBlockMapping.R())
             return ErrorCode::Fail;
         // DEBUG std::cout << "KEY: " << key << "AT: " << At(key) << std::endl;
-        if (At(key) == 0xffffffffffffffff) return ErrorCode::Fail;
+        if (At(key) == 0xffffffffffffffff)
+            return ErrorCode::Fail;
         if (m_pBlockController.ReadBlocks((AddressType*)At(key), value))
             return ErrorCode::Success;
         return ErrorCode::Fail;

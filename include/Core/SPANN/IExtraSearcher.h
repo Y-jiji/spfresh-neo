@@ -6,7 +6,6 @@
 
 #include "Options.h"
 
-#include "Core/VectorIndex.h"
 #include "Core/Common/VersionLabel.h"
 #include "Helper/AsyncFileReader.h"
 

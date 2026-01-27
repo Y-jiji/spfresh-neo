@@ -9,8 +9,6 @@
 #include <vector>
 #include <shared_mutex>
 
-#include "Core/VectorIndex.h"
-
 #include "Utils/CommonUtils.h"
 #include "QueryResultSet.h"
 #include "WorkSpace.h"

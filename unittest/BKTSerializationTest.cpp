@@ -24,7 +24,7 @@ void GenerateRandomVectors(std::vector<T>& data, int numVectors, int dimension) 
 }
 
 template <typename T>
-bool CompareDatasets(const VectorIndex* index1, const VectorIndex* index2) {
+bool CompareDatasets(const BKT::Index<T>* index1, const BKT::Index<T>* index2) {
     if (index1->GetNumSamples() != index2->GetNumSamples()) {
         std::cerr << "Sample counts differ: " << index1->GetNumSamples() << " vs " << index2->GetNumSamples() << std::endl;
         return false;

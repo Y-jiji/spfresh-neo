@@ -8,6 +8,7 @@
 #include "Helper/AsyncFileReader.h"
 #include "IExtraSearcher.h"
 #include "Core/Common/TruthSet.h"
+#include "Core/BKT/Index.h"
 #include "Compressor.h"
 
 #include <map>
@@ -177,7 +178,7 @@ class ExtraStaticSearcher {
         return true;
     }
 
-    virtual void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<VectorIndex> p_index, SearchStats* p_stats, std::set<int>* truth, std::map<int, std::set<int>>* found) {
+    virtual void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<BKT::Index<ValueType>> p_index, SearchStats* p_stats, std::set<int>* truth, std::map<int, std::set<int>>* found) {
         const uint32_t postingListCount = static_cast<uint32_t>(p_exWorkSpace->m_postingIDs.size());
 
         COMMON::QueryResultSet<ValueType>& queryResults = *((COMMON::QueryResultSet<ValueType>*)&p_queryResults);
@@ -362,7 +363,7 @@ class ExtraStaticSearcher {
         return postingListFullData;
     }
 
-    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
+    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<BKT::Index<ValueType>> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
         std::string outputFile = p_opt.m_indexDirectory + FolderSep + p_opt.m_ssdIndex;
         if (outputFile.empty()) {
             LOG(Helper::LogLevel::LL_Error, "Output file can't be empty!\n");
@@ -486,7 +487,7 @@ class ExtraStaticSearcher {
         }
 
         // Sort results either in CPU or GPU
-        VectorIndex::SortSelections(&selections.m_selections);
+        SPTAG::SortSelections(&selections.m_selections);
 
         auto t3 = std::chrono::high_resolution_clock::now();
         LOG(Helper::LogLevel::LL_Info, "Time to sort selections:%.2lf sec.\n", ((double)std::chrono::duration_cast<std::chrono::seconds>(t3 - t2).count()) + ((double)std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()) / 1000);
@@ -830,12 +831,12 @@ class ExtraStaticSearcher {
         offsetVector = offsetVectorID + sizeof(int);
     }
 
-    inline void ParseDeltaEncoding(std::shared_ptr<VectorIndex>& p_index, ListInfo* p_info, ValueType* vector) {
+    inline void ParseDeltaEncoding(std::shared_ptr<BKT::Index<ValueType>>& p_index, ListInfo* p_info, ValueType* vector) {
         ValueType* headVector = (ValueType*)p_index->GetSample((SizeType)(p_info - m_listInfos.data()));
         COMMON::SIMDUtils::ComputeSum(vector, headVector, m_iDataDimension);
     }
 
-    inline void ParseEncoding(std::shared_ptr<VectorIndex>& p_index, ListInfo* p_info, ValueType* vector) {}
+    inline void ParseEncoding(std::shared_ptr<BKT::Index<ValueType>>& p_index, ListInfo* p_info, ValueType* vector) {}
 
     void SelectPostingOffset(
         const std::vector<size_t>& p_postingListBytes,
@@ -911,7 +912,7 @@ class ExtraStaticSearcher {
         LOG(Helper::LogLevel::LL_Info, "TotalPageNumbers: %d, IndexSize: %llu\n", currPageNum, static_cast<uint64_t>(currPageNum) * PageSize + currOffset);
     }
 
-    void OutputSSDIndexFile(const std::string& p_outputFile, bool m_enableDeltaEncoding, bool m_enablePostingListRearrange, bool m_enableDataCompression, bool m_enableDictTraining, size_t p_spacePerVector, const std::vector<int>& p_postingListSizes, const std::vector<size_t>& p_postingListBytes, std::shared_ptr<VectorIndex> p_headIndex, Selection& p_postingSelections, const std::unique_ptr<int[]>& p_postPageNum, const std::unique_ptr<std::uint16_t[]>& p_postPageOffset, const std::vector<int>& p_postingOrderInIndex, std::shared_ptr<VectorSet> p_fullVectors, size_t p_postingListOffset) {
+    void OutputSSDIndexFile(const std::string& p_outputFile, bool m_enableDeltaEncoding, bool m_enablePostingListRearrange, bool m_enableDataCompression, bool m_enableDictTraining, size_t p_spacePerVector, const std::vector<int>& p_postingListSizes, const std::vector<size_t>& p_postingListBytes, std::shared_ptr<BKT::Index<ValueType>> p_headIndex, Selection& p_postingSelections, const std::unique_ptr<int[]>& p_postPageNum, const std::unique_ptr<std::uint16_t[]>& p_postPageOffset, const std::vector<int>& p_postingOrderInIndex, std::shared_ptr<VectorSet> p_fullVectors, size_t p_postingListOffset) {
         LOG(Helper::LogLevel::LL_Info, "Start output...\n");
 
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -1178,7 +1179,7 @@ class ExtraStaticSearcher {
     bool m_enableDictTraining;
 
     void (ExtraStaticSearcher<ValueType>::*m_parsePosting)(uint64_t&, uint64_t&, int, int);
-    void (ExtraStaticSearcher<ValueType>::*m_parseEncoding)(std::shared_ptr<VectorIndex>&, ListInfo*, ValueType*);
+    void (ExtraStaticSearcher<ValueType>::*m_parseEncoding)(std::shared_ptr<BKT::Index<ValueType>>&, ListInfo*, ValueType*);
 
     int m_vectorInfoSize = 0;
     int m_iDataDimension = 0;

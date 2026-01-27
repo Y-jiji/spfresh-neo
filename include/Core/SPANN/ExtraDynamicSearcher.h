@@ -13,6 +13,7 @@
 #include "PersistentBuffer.h"
 #include "Core/Common/PostingSizeRecord.h"
 #include "ExtraSPDKController.h"
+#include "Core/BKT/Index.h"
 
 using SPDKIO = SPTAG::SPANN::SPDKIO;
 #include <chrono>
@@ -33,14 +34,14 @@ template <typename ValueType>
 class ExtraDynamicSearcher {
     class MergeAsyncJob : public Helper::ThreadPool::Job {
        private:
-        VectorIndex* m_index;
+        SPTAG::BKT::Index<ValueType>* m_index;
         ExtraDynamicSearcher<ValueType>* m_extraIndex;
         SizeType headID;
         bool disableReassign;
         std::function<void()> m_callback;
 
        public:
-        MergeAsyncJob(VectorIndex* headIndex, ExtraDynamicSearcher<ValueType>* extraIndex, SizeType headID, bool disableReassign, std::function<void()> p_callback)
+        MergeAsyncJob(SPTAG::BKT::Index<ValueType>* headIndex, ExtraDynamicSearcher<ValueType>* extraIndex, SizeType headID, bool disableReassign, std::function<void()> p_callback)
             : m_index(headIndex), m_extraIndex(extraIndex), headID(headID), disableReassign(disableReassign), m_callback(std::move(p_callback)) {}
 
         ~MergeAsyncJob() {}
@@ -55,14 +56,14 @@ class ExtraDynamicSearcher {
 
     class SplitAsyncJob : public Helper::ThreadPool::Job {
        private:
-        VectorIndex* m_index;
+        SPTAG::BKT::Index<ValueType>* m_index;
         ExtraDynamicSearcher<ValueType>* m_extraIndex;
         SizeType headID;
         bool disableReassign;
         std::function<void()> m_callback;
 
        public:
-        SplitAsyncJob(VectorIndex* headIndex, ExtraDynamicSearcher<ValueType>* extraIndex, SizeType headID, bool disableReassign, std::function<void()> p_callback)
+        SplitAsyncJob(SPTAG::BKT::Index<ValueType>* headIndex, ExtraDynamicSearcher<ValueType>* extraIndex, SizeType headID, bool disableReassign, std::function<void()> p_callback)
             : m_index(headIndex), m_extraIndex(extraIndex), headID(headID), disableReassign(disableReassign), m_callback(std::move(p_callback)) {}
 
         ~SplitAsyncJob() {}
@@ -77,14 +78,14 @@ class ExtraDynamicSearcher {
 
     class ReassignAsyncJob : public Helper::ThreadPool::Job {
        private:
-        VectorIndex* m_index;
+        SPTAG::BKT::Index<ValueType>* m_index;
         ExtraDynamicSearcher<ValueType>* m_extraIndex;
         std::shared_ptr<std::string> vectorInfo;
         SizeType HeadPrev;
         std::function<void()> m_callback;
 
        public:
-        ReassignAsyncJob(VectorIndex* headIndex, ExtraDynamicSearcher<ValueType>* extraIndex, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev, std::function<void()> p_callback)
+        ReassignAsyncJob(SPTAG::BKT::Index<ValueType>* headIndex, ExtraDynamicSearcher<ValueType>* extraIndex, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev, std::function<void()> p_callback)
             : m_index(headIndex), m_extraIndex(extraIndex), vectorInfo(std::move(vectorInfo)), HeadPrev(HeadPrev), m_callback(std::move(p_callback)) {}
 
         ~ReassignAsyncJob() {}
@@ -163,7 +164,7 @@ class ExtraDynamicSearcher {
 
     // headCandidates: search data structrue for "vid" vector
     // headID: the head vector that stands for vid
-    bool IsAssumptionBroken(VectorIndex* p_index, SizeType headID, QueryResult& headCandidates, SizeType vid) {
+    bool IsAssumptionBroken(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, QueryResult& headCandidates, SizeType vid) {
         p_index->SearchIndex(headCandidates);
         int replicaCount = 0;
         BasicResult* queryResults = headCandidates.GetResults();
@@ -196,7 +197,7 @@ class ExtraDynamicSearcher {
     }
 
     // Measure that in "headID" posting list, how many vectors break their assumption
-    int QuantifyAssumptionBroken(VectorIndex* p_index, SizeType headID, std::string& postingList, SizeType SplitHead, std::vector<SizeType>& newHeads, std::set<int>& brokenID, int topK = 0, float ratio = 1.0) {
+    int QuantifyAssumptionBroken(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, std::string& postingList, SizeType SplitHead, std::vector<SizeType>& newHeads, std::set<int>& brokenID, int topK = 0, float ratio = 1.0) {
         int assumptionBrokenNum = 0;
         int postVectorNum = postingList.size() / m_vectorInfoSize;
         uint8_t* postingP = reinterpret_cast<uint8_t*>(&postingList.front());
@@ -266,7 +267,7 @@ class ExtraDynamicSearcher {
 
     // Measure that around "headID", how many vectors break their assumption
     //"headID" is the head vector before split
-    void QuantifySplitCaseB(VectorIndex* p_index, SizeType headID, std::vector<SizeType>& newHeads, SizeType SplitHead, int split_order, int assumptionBrokenNum_top0, std::set<int>& brokenID) {
+    void QuantifySplitCaseB(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, std::vector<SizeType>& newHeads, SizeType SplitHead, int split_order, int assumptionBrokenNum_top0, std::set<int>& brokenID) {
         COMMON::QueryResultSet<ValueType> nearbyHeads(reinterpret_cast<const ValueType*>(p_index->GetSample(headID)), 64);
         std::vector<std::string> postingLists;
         p_index->SearchIndex(nearbyHeads);
@@ -310,7 +311,7 @@ class ExtraDynamicSearcher {
         QuantifySplitCaseB(headID, newHeads, SplitHead, split_order, assumptionBrokenNum, brokenID);
     }
 
-    bool CheckIsNeedReassign(VectorIndex* p_index, std::vector<SizeType>& newHeads, ValueType* data, SizeType splitHead, float_t headToSplitHeadDist, float_t currentHeadDist, bool isInSplitHead, SizeType currentHead) {
+    bool CheckIsNeedReassign(SPTAG::BKT::Index<ValueType>* p_index, std::vector<SizeType>& newHeads, ValueType* data, SizeType splitHead, float_t headToSplitHeadDist, float_t currentHeadDist, bool isInSplitHead, SizeType currentHead) {
         float_t splitHeadDist = p_index->ComputeDistance(data, p_index->GetSample(splitHead));
 
         if (isInSplitHead) {
@@ -333,7 +334,7 @@ class ExtraDynamicSearcher {
         memcpy(ptr + m_metaDataSize, vector, m_vectorInfoSize - m_metaDataSize);
     }
 
-    void CalculatePostingDistribution(VectorIndex* p_index) {
+    void CalculatePostingDistribution(SPTAG::BKT::Index<ValueType>* p_index) {
         if (m_opt->m_inPlace)
             return;
         int top = m_postingSizeLimit / 10 + 1;
@@ -376,7 +377,7 @@ class ExtraDynamicSearcher {
     }
 
     // TODO
-    void RefineIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_index) {
+    void RefineIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index) {
         LOG(Helper::LogLevel::LL_Info, "Begin PreReassign\n");
         std::atomic_bool doneReassign = false;
         // p_index->UpdateIndex();
@@ -437,7 +438,7 @@ class ExtraDynamicSearcher {
         }
     }
 
-    ErrorCode Split(VectorIndex* p_index, const SizeType headID, bool reassign = false, bool preReassign = false) {
+    ErrorCode Split(SPTAG::BKT::Index<ValueType>* p_index, const SizeType headID, bool reassign = false, bool preReassign = false) {
         auto splitBegin = std::chrono::high_resolution_clock::now();
         // LOG(Helper::LogLevel::LL_Info, "into split: %d\n", headID);
         std::vector<SizeType> newHeadsID;
@@ -625,7 +626,7 @@ class ExtraDynamicSearcher {
         return ErrorCode::Success;
     }
 
-    ErrorCode MergePostings(VectorIndex* p_index, SizeType headID, bool reassign = false) {
+    ErrorCode MergePostings(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, bool reassign = false) {
         {
             if (!m_mergeLock.try_lock()) {
                 auto* curJob = new MergeAsyncJob(p_index, this, headID, reassign, nullptr);
@@ -782,7 +783,7 @@ class ExtraDynamicSearcher {
         return ErrorCode::Success;
     }
 
-    inline void SplitAsync(VectorIndex* p_index, SizeType headID, std::function<void()> p_callback = nullptr) {
+    inline void SplitAsync(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, std::function<void()> p_callback = nullptr) {
         // LOG(Helper::LogLevel::LL_Info,"Into SplitAsync, current headID: %d, size: %d\n", headID, m_postingSizes.GetSize(headID));
         // tbb::concurrent_hash_map<SizeType, SizeType>::const_accessor headIDAccessor;
         // if (m_splitList.find(headIDAccessor, headID)) {
@@ -805,7 +806,7 @@ class ExtraDynamicSearcher {
         // LOG(Helper::LogLevel::LL_Info, "Add to thread pool\n");
     }
 
-    inline void MergeAsync(VectorIndex* p_index, SizeType headID, std::function<void()> p_callback = nullptr) {
+    inline void MergeAsync(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, std::function<void()> p_callback = nullptr) {
         if (!m_opt->m_update)
             return;
         tbb::concurrent_hash_map<SizeType, SizeType>::const_accessor headIDAccessor;
@@ -819,12 +820,12 @@ class ExtraDynamicSearcher {
         m_splitThreadPool->add(curJob);
     }
 
-    inline void ReassignAsync(VectorIndex* p_index, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev, std::function<void()> p_callback = nullptr) {
+    inline void ReassignAsync(SPTAG::BKT::Index<ValueType>* p_index, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev, std::function<void()> p_callback = nullptr) {
         auto* curJob = new ReassignAsyncJob(p_index, this, std::move(vectorInfo), HeadPrev, p_callback);
         m_splitThreadPool->add(curJob);
     }
 
-    ErrorCode CollectReAssign(VectorIndex* p_index, SizeType headID, std::vector<std::string>& postingLists, std::vector<SizeType>& newHeadsID) {
+    ErrorCode CollectReAssign(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, std::vector<std::string>& postingLists, std::vector<SizeType>& newHeadsID) {
         auto headVector = reinterpret_cast<const ValueType*>(p_index->GetSample(headID));
         std::vector<float> newHeadsDist;
         std::set<SizeType> reAssignVectorsTopK;
@@ -904,7 +905,7 @@ class ExtraDynamicSearcher {
         return ErrorCode::Success;
     }
 
-    bool RNGSelection(std::vector<Edge>& selections, ValueType* queryVector, VectorIndex* p_index, SizeType p_fullID, int& replicaCount, int checkHeadID = -1) {
+    bool RNGSelection(std::vector<Edge>& selections, ValueType* queryVector, SPTAG::BKT::Index<ValueType>* p_index, SizeType p_fullID, int& replicaCount, int checkHeadID = -1) {
         QueryResult queryResults(queryVector, m_opt->m_internalResultNum, false);
         p_index->SearchIndex(queryResults);
 
@@ -936,7 +937,7 @@ class ExtraDynamicSearcher {
         return true;
     }
 
-    ErrorCode Append(VectorIndex* p_index, SizeType headID, int appendNum, std::string& appendPosting, int reassignThreshold = 0) {
+    ErrorCode Append(SPTAG::BKT::Index<ValueType>* p_index, SizeType headID, int appendNum, std::string& appendPosting, int reassignThreshold = 0) {
         auto appendBegin = std::chrono::high_resolution_clock::now();
         if (appendPosting.empty()) {
             LOG(Helper::LogLevel::LL_Error, "Error! empty append posting!\n");
@@ -1005,7 +1006,7 @@ class ExtraDynamicSearcher {
         return ErrorCode::Success;
     }
 
-    void Reassign(VectorIndex* p_index, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev) {
+    void Reassign(SPTAG::BKT::Index<ValueType>* p_index, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev) {
         SizeType VID = *((SizeType*)vectorInfo->c_str());
         uint8_t version = *((uint8_t*)(vectorInfo->c_str() + sizeof(VID)));
         // return;
@@ -1066,7 +1067,7 @@ class ExtraDynamicSearcher {
         return true;
     }
 
-    void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<VectorIndex> p_index, SearchStats* p_stats, std::set<int>* truth, std::map<int, std::set<int>>* found) {
+    void SearchIndex(ExtraWorkSpace* p_exWorkSpace, QueryResult& p_queryResults, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index, SearchStats* p_stats, std::set<int>* truth, std::map<int, std::set<int>>* found) {
         auto exStart = std::chrono::high_resolution_clock::now();
 
         // const auto postingListCount = static_cast<uint32_t>(p_exWorkSpace->m_postingIDs.size());
@@ -1151,7 +1152,7 @@ class ExtraDynamicSearcher {
         }
     }
 
-    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<VectorIndex> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
+    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
         m_versionMap = &p_versionMap;
         m_opt = &p_opt;
 
@@ -1277,7 +1278,7 @@ class ExtraDynamicSearcher {
         }
 
         // Sort results either in CPU or GPU
-        VectorIndex::SortSelections(&selections.m_selections);
+        SPTAG::SortSelections(&selections.m_selections);
 
         auto t3 = std::chrono::high_resolution_clock::now();
         LOG(Helper::LogLevel::LL_Info, "Time to sort selections:%.2lf sec.\n", ((double)std::chrono::duration_cast<std::chrono::seconds>(t3 - t2).count()) + ((double)std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()) / 1000);
@@ -1431,7 +1432,7 @@ class ExtraDynamicSearcher {
         }
     }
 
-    ErrorCode AddIndex(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, SizeType begin) {
+    ErrorCode AddIndex(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index, SizeType begin) {
         for (int v = 0; v < p_vectorSet->Count(); v++) {
             SizeType VID = begin + v;
             std::vector<Edge> selections(static_cast<size_t>(m_opt->m_replicaCount));
@@ -1449,7 +1450,7 @@ class ExtraDynamicSearcher {
         return ErrorCode::Success;
     }
 
-    SizeType SearchVector(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<VectorIndex> p_index, int testNum = 64, SizeType VID = -1) {
+    SizeType SearchVector(std::shared_ptr<VectorSet>& p_vectorSet, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index, int testNum = 64, SizeType VID = -1) {
         QueryResult queryResults(p_vectorSet->GetVector(0), testNum, false);
         p_index->SearchIndex(queryResults);
 
@@ -1476,7 +1477,7 @@ class ExtraDynamicSearcher {
         return -1;
     }
 
-    void ForceGC(VectorIndex* p_index) {
+    void ForceGC(SPTAG::BKT::Index<ValueType>* p_index) {
         for (int i = 0; i < p_index->GetNumSamples(); i++) {
             if (!p_index->ContainSample(i))
                 continue;
@@ -1522,7 +1523,7 @@ class ExtraDynamicSearcher {
         }
     }
 
-    void InitPostingRecord(std::shared_ptr<VectorIndex> p_index) {
+    void InitPostingRecord(std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index) {
         m_postingSizes.Initialize((SizeType)(p_index->GetNumSamples()), p_index->m_iDataBlockSize, p_index->m_iDataCapacity);
     }
 

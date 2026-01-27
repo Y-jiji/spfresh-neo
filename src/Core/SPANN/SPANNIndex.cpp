@@ -35,6 +35,16 @@ bool Index<T>::CheckHeadIndexType() {
 }
 
 template <typename T>
+ErrorCode Index<T>::LoadIndexConfig(Helper::IniReader& p_reader) {
+    std::string metadataSection("MetaData");
+    if (p_reader.DoesSectionExist(metadataSection)) {
+        m_metadataManager.SetMetadataFile(p_reader.GetParameter(metadataSection, "MetaDataFilePath", std::string()));
+        m_metadataManager.SetMetadataIndexFile(p_reader.GetParameter(metadataSection, "MetaDataIndexPath", std::string()));
+    }
+    return LoadConfig(p_reader);
+}
+
+template <typename T>
 ErrorCode Index<T>::LoadConfig(Helper::IniReader& p_reader) {
     m_index = std::shared_ptr<SPTAG::BKT::Index<T>>(new SPTAG::BKT::Index<T>());
 
@@ -179,6 +189,25 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     }
 
     return ErrorCode::Success;
+}
+
+template <typename T>
+ErrorCode Index<T>::SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut) {
+    if (nullptr != m_pMetadata) {
+        IOSTRING(p_configOut, WriteString, "[MetaData]\n");
+        IOSTRING(p_configOut, WriteString, ("MetaDataFilePath=" + m_metadataManager.GetMetadataFile() + "\n").c_str());
+        IOSTRING(p_configOut, WriteString, ("MetaDataIndexPath=" + m_metadataManager.GetMetadataIndexFile() + "\n").c_str());
+        if (m_metadataManager.HasMetaMapping())
+            IOSTRING(p_configOut, WriteString, "MetaDataToVectorIndex=true\n");
+        IOSTRING(p_configOut, WriteString, "\n");
+    }
+
+    IOSTRING(p_configOut, WriteString, "[Index]\n");
+    IOSTRING(p_configOut, WriteString, ("IndexAlgoType=" + SPTAG::Helper::Convert::ConvertToString(GetIndexAlgoType()) + "\n").c_str());
+    IOSTRING(p_configOut, WriteString, ("ValueType=" + SPTAG::Helper::Convert::ConvertToString(GetVectorValueType()) + "\n").c_str());
+    IOSTRING(p_configOut, WriteString, "\n");
+
+    return SaveConfig(p_configOut);
 }
 
 template <typename T>
@@ -959,6 +988,63 @@ ErrorCode Index<T>::DeleteIndex(const void* p_vectors, SizeType p_vectorNum) {
         return ErrorCode::ExternalAbort;
 
     return DeleteIndex(p_id);
+}
+
+template <typename T>
+ErrorCode Index<T>::AddIndexId(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, int& beginHead, int& endHead) {
+    return ErrorCode::Undefined;
+}
+
+template <typename T>
+ErrorCode Index<T>::AddIndexIdx(SizeType begin, SizeType end) {
+    return ErrorCode::Undefined;
+}
+
+template <typename T>
+ErrorCode Index<T>::DeleteIndex(ByteArray p_meta) {
+    if (!m_metadataManager.HasMetaMapping())
+        return ErrorCode::VectorNotFound;
+
+    std::string meta((char*)p_meta.Data(), p_meta.Length());
+    SizeType vid = GetMetaMapping(meta);
+    if (vid >= 0)
+        return DeleteIndex(vid);
+    return ErrorCode::VectorNotFound;
+}
+
+template <typename T>
+const void* Index<T>::GetSample(ByteArray p_meta, bool& deleteFlag) {
+    if (!m_metadataManager.HasMetaMapping())
+        return nullptr;
+
+    std::string meta((char*)p_meta.Data(), p_meta.Length());
+    SizeType vid = GetMetaMapping(meta);
+    if (vid >= 0 && vid < GetNumSamples()) {
+        deleteFlag = !ContainSample(vid);
+        return GetSample(vid);
+    }
+    return nullptr;
+}
+
+template <typename T>
+SizeType Index<T>::GetMetaMapping(std::string& meta) const {
+    return m_metadataManager.GetMetaMapping(meta);
+}
+
+template <typename T>
+void Index<T>::UpdateMetaMapping(const std::string& meta, SizeType i) {
+    SizeType existing = m_metadataManager.GetMetaMapping(const_cast<std::string&>(meta));
+    if (existing >= 0)
+        DeleteIndex(existing);
+    m_metadataManager.UpdateMetaMapping(meta, i);
+}
+
+template <typename T>
+void Index<T>::BuildMetaMapping(bool p_checkDeleted) {
+    m_metadataManager.BuildMetaMapping(m_pMetadata.get(), GetNumSamples(), std::function<bool(SizeType)>([this](SizeType idx) -> bool {
+                                           return this->ContainSample(idx);
+                                       }),
+                                       m_iDataBlockSize, p_checkDeleted);
 }
 }  // namespace SPTAG::SPANN
 

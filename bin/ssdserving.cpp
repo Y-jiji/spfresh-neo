@@ -7,7 +7,6 @@
 #include <chrono>
 
 #include "Core/Common.h"
-#include "Core/VectorIndex.h"
 #include "Core/SPANN/Index.h"
 #include "Core/Common/TruthSet.h"
 #include "Core/Common/QueryResultSet.h"
@@ -28,7 +27,6 @@ const std::string SEC_BUILD_SSD_INDEX = "BuildSSDIndex";
 const std::string SEC_SEARCH_SSD_INDEX = "SearchSSDIndex";
 
 }  // namespace SPTAG::SSDServing
-
 
 namespace SPTAG::SSDServing::Utils {
 typedef std::chrono::steady_clock SteadClock;
@@ -353,7 +351,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
     if (p_opts.m_recall_analysis) {
         LOG(Helper::LogLevel::LL_Info, "Start recall analysis...\n");
 
-        std::shared_ptr<VectorIndex> headIndex = p_index->GetMemoryIndex();
+        std::shared_ptr<SPTAG::BKT::Index<ValueType>> headIndex = std::static_pointer_cast<SPTAG::BKT::Index<ValueType>>(p_index->GetMemoryIndex());
         SizeType sampleSize = numQueries < 100 ? numQueries : 100;
         SizeType sampleK = headIndex->GetNumSamples() < 1000 ? headIndex->GetNumSamples() : 1000;
         float sampleE = 1e-6f;
@@ -561,11 +559,14 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
         (*config_map)[SEC_BUILD_SSD_INDEX][param] = value;
     }
 
-    std::shared_ptr<SPTAG::VectorIndex> index;
+    std::shared_ptr<SPTAG::SPANN::Index<std::int8_t>> index_Int8;
+    std::shared_ptr<SPTAG::SPANN::Index<std::uint8_t>> index_UInt8;
+    std::shared_ptr<SPTAG::SPANN::Index<std::int16_t>> index_Int16;
+    std::shared_ptr<SPTAG::SPANN::Index<float>> index_Float;
     switch (valueType) {
-#define DefineVectorValueType(Name, Type)                                           \
-    case SPTAG::VectorValueType::Name:                                              \
-        index = std::shared_ptr<SPTAG::VectorIndex>(new SPTAG::SPANN::Index<Type>); \
+#define DefineVectorValueType(Name, Type)                                                         \
+    case SPTAG::VectorValueType::Name:                                                            \
+        index_##Name = std::shared_ptr<SPTAG::SPANN::Index<Type>>(new SPTAG::SPANN::Index<Type>); \
         break;
 
 #include "Core/DefinitionList.h"
@@ -577,20 +578,36 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
 
     for (auto& sectionKV : *config_map) {
         for (auto& KV : sectionKV.second) {
-            index->SetParameter(KV.first, KV.second, sectionKV.first);
+            switch (valueType) {
+#define DefineVectorValueType(Name, Type)                                                         \
+    case SPTAG::VectorValueType::Name:                                                            \
+        index_##Name->SetParameter(KV.first.c_str(), KV.second.c_str(), sectionKV.first.c_str()); \
+        break;
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+            }
         }
     }
 
-    if (index->BuildIndex() != SPTAG::ErrorCode::Success) {
+    SPTAG::ErrorCode buildResult = SPTAG::ErrorCode::Success;
+    switch (valueType) {
+#define DefineVectorValueType(Name, Type)         \
+    case SPTAG::VectorValueType::Name:            \
+        buildResult = index_##Name->BuildIndex(); \
+        break;
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+    }
+    if (buildResult != SPTAG::ErrorCode::Success) {
         LOG(Helper::LogLevel::LL_Error, "Failed to build index.\n");
         exit(1);
     }
 
     SPTAG::SPANN::Options* opts = nullptr;
 
-#define DefineVectorValueType(Name, Type)                               \
-    if (index->GetVectorValueType() == SPTAG::VectorValueType::Name) {  \
-        opts = ((SPTAG::SPANN::Index<Type>*)index.get())->GetOptions(); \
+#define DefineVectorValueType(Name, Type)            \
+    if (valueType == SPTAG::VectorValueType::Name) { \
+        opts = index_##Name->GetOptions();           \
     }
 
 #include "Core/DefinitionList.h"
@@ -623,9 +640,9 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
     }
 
     if (searchSSD) {
-#define DefineVectorValueType(Name, Type)                            \
-    if (opts->m_valueType == SPTAG::VectorValueType::Name) {         \
-        SSDIndex::Search((SPTAG::SPANN::Index<Type>*)(index.get())); \
+#define DefineVectorValueType(Name, Type)                    \
+    if (opts->m_valueType == SPTAG::VectorValueType::Name) { \
+        SSDIndex::Search(index_##Name.get());                \
     }
 
 #include "Core/DefinitionList.h"

@@ -9,10 +9,7 @@
 
 #include "Core/Common.h"
 #include "Core/Common/TruthSet.h"
-#include "Core/Common/TruthSet.h"
 #include "Core/SPANN/Index.h"
-#include "Core/VectorIndex.h"
-#include "Core/VectorIndex.h"
 #include "Core/SPANN/Index.h"
 #include "Helper/VectorSetReader.h"
 #include "Helper/VectorSetReader.h"
@@ -159,7 +156,7 @@ void PrintPercentiles(const std::vector<V>& p_values, std::function<T(const V&)>
 }
 
 template <typename T>
-static float CalculateRecallSPFresh(SPTAG::VectorIndex* index, std::vector<SPTAG::QueryResult>& results, const std::vector<std::set<SPTAG::SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SPTAG::SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false) {
+static float CalculateRecallSPFresh(BKT::Index<T>* index, std::vector<SPTAG::QueryResult>& results, const std::vector<std::set<SPTAG::SizeType>>& truth, int K, int truthK, std::shared_ptr<SPTAG::VectorSet> querySet, std::shared_ptr<SPTAG::VectorSet> vectorSet, SPTAG::SizeType NumQuerys, std::ofstream* log = nullptr, bool debug = false) {
     float meanrecall = 0, minrecall = SPTAG::MaxDist, maxrecall = 0, stdrecall = 0;
     std::vector<float> thisrecall(NumQuerys, 0);
     std::unique_ptr<bool[]> visited(new bool[K]);

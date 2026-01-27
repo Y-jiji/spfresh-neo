@@ -5,7 +5,8 @@
 #define _SPTAG_SPANN_INDEX_H_
 
 #include "Core/Common.h"
-#include "Core/VectorIndex.h"
+#include "Core/CommonDataStructure.h"
+#include "Core/MetaDataManager.h"
 #include "Core/BKT/Index.h"
 
 #include "Utils/CommonUtils.h"
@@ -30,7 +31,7 @@
 
 namespace SPTAG::SPANN {
 template <typename T>
-class Index : public VectorIndex {
+class Index {
    private:
     std::shared_ptr<BKT::Index<T>> m_index;
     std::shared_ptr<std::uint64_t> m_vectorTranslateMap;
@@ -46,18 +47,27 @@ class Index : public VectorIndex {
     std::mutex m_dataAddLock;
     COMMON::VersionLabel m_versionMap;
 
+    bool m_bReady;
+    std::shared_ptr<MetadataSet> m_pMetadata;
+    MetaDataManager m_metadataManager;
+
+   public:
+    int m_iDataBlockSize;
+    int m_iDataCapacity;
+    int m_iMetaRecordSize;
+
    public:
     static thread_local std::shared_ptr<ExtraWorkSpace> m_workspace;
 
    public:
-    Index() {
+    Index() : m_bReady(false), m_iDataBlockSize(1024 * 1024), m_iDataCapacity(MaxSize), m_iMetaRecordSize(10) {
         m_fComputeDistance = std::function<float(const T*, const T*, DimensionType)>(COMMON::DistanceCalcSelector<T>(m_options.m_distCalcMethod));
         m_iBaseSquare = (m_options.m_distCalcMethod == DistCalcMethod::Cosine) ? COMMON::Utils::GetBase<T>() * COMMON::Utils::GetBase<T>() : 1;
     }
 
     ~Index() {}
 
-    inline std::shared_ptr<VectorIndex> GetMemoryIndex() {
+    inline std::shared_ptr<BKT::Index<T>> GetMemoryIndex() {
         return m_index;
     }
     inline std::shared_ptr<ExtraDynamicSearcher<T>> GetDiskIndex() {
@@ -128,6 +138,8 @@ class Index : public VectorIndex {
         return std::move(files);
     }
 
+    ErrorCode LoadIndexConfig(Helper::IniReader& p_reader);
+    ErrorCode SaveIndexConfig(std::shared_ptr<Helper::DiskIO> p_configOut);
     ErrorCode SaveConfig(std::shared_ptr<Helper::DiskIO> p_configout);
     ErrorCode SaveIndexData(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams);
 
@@ -147,6 +159,30 @@ class Index : public VectorIndex {
 
     inline const void* GetSample(const SizeType idx) const {
         return nullptr;
+    }
+    inline bool IsReady() const {
+        return m_bReady;
+    }
+    inline void SetReady(bool p_ready) {
+        m_bReady = p_ready;
+    }
+    inline bool HasMetaMapping() const {
+        return m_metadataManager.HasMetaMapping();
+    }
+    SizeType GetMetaMapping(std::string& meta) const;
+    void UpdateMetaMapping(const std::string& meta, SizeType i);
+    void BuildMetaMapping(bool p_checkDeleted = true);
+    inline ByteArray GetMetadata(SizeType p_vectorID) const {
+        if (nullptr != m_pMetadata) {
+            return m_pMetadata->GetMetadata(p_vectorID);
+        }
+        return ByteArray::c_empty;
+    }
+    inline MetadataSet* GetMetadata() const {
+        return m_pMetadata.get();
+    }
+    inline void SetMetadata(MetadataSet* p_new) {
+        m_pMetadata.reset(p_new);
     }
     inline SizeType GetNumDeleted() const {
         return m_versionMap.GetDeleteCount();
@@ -216,13 +252,17 @@ class Index : public VectorIndex {
         return ErrorCode::Undefined;
     }
     ErrorCode AddIndex(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, std::shared_ptr<MetadataSet> p_metadataSet, bool p_withMetaIndex = false, bool p_normalized = false);
+    ErrorCode AddIndexId(const void* p_data, SizeType p_vectorNum, DimensionType p_dimension, int& beginHead, int& endHead);
+    ErrorCode AddIndexIdx(SizeType begin, SizeType end);
     ErrorCode DeleteIndex(const SizeType& p_id);
 
     ErrorCode DeleteIndex(const void* p_vectors, SizeType p_vectorNum);
+    ErrorCode DeleteIndex(ByteArray p_meta);
+    const void* GetSample(ByteArray p_meta, bool& deleteFlag);
     ErrorCode RefineIndex(const std::vector<std::shared_ptr<Helper::DiskIO>>& p_indexStreams, IAbortOperation* p_abort) {
         return ErrorCode::Undefined;
     }
-    ErrorCode RefineIndex(std::shared_ptr<VectorIndex>& p_newIndex) {
+    ErrorCode RefineIndex(std::shared_ptr<SPANN::Index<T>>& p_newIndex) {
         return ErrorCode::Undefined;
     }
 
