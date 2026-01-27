@@ -1,13 +1,12 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <cstring>
 #include <cstdlib>
 #include "Core/SPANN/ExtraSPDKController.h"
 
 using namespace SPTAG;
 
-bool BKTSerializationTest() {
+bool ExtraSPDKControllerTest() {
     std::cout << "Testing SPDK Controller Basic Functionality" << std::endl;
 
     const char* spdkConf = std::getenv("SPFRESH_SPDK_CONF");
@@ -159,7 +158,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Extra SPDK Controller Test" << std::endl;
     std::cout << "======================================" << std::endl;
 
-    bool testPassed = BKTSerializationTest();
+    bool testPassed = ExtraSPDKControllerTest();
 
     std::cout << "\n======================================" << std::endl;
     if (testPassed) {
