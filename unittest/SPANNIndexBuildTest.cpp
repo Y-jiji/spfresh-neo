@@ -54,8 +54,8 @@ bool TestSPANNIndexBuild() {
     const int numVectors = 100;
     const int dimension = 32;
     const std::string testDir = "test_spann_build";
-    const std::string vectorFile = testDir + "/vectors.txt";
-    const std::string mappingFile = testDir + "/spdk_mapping.txt";
+    const std::string vectorFile = testDir + "/vectors.bin";
+    const std::string mappingFile = testDir + "/spdk_mapping.bin";
 
     std::cout << "  Setting up test directory..." << std::endl;
     std::filesystem::create_directory(testDir);
@@ -206,9 +206,9 @@ bool TestSPANNIndexBuild() {
             SizeType vid;
             ErrorCode ret = index->AddIndexSPFresh(
                 insertData.data() + i * dimension,  // pointer to vector
-                1,                                   // insert 1 vector at a time
-                dimension,                           // dimension
-                &vid                                 // output VID
+                1,                                  // insert 1 vector at a time
+                dimension,                          // dimension
+                &vid                                // output VID
             );
             if (ret != ErrorCode::Success) {
                 std::cerr << "  FAILED: AddIndexSPFresh returned error for vector " << i << std::endl;

@@ -10,50 +10,6 @@
 namespace SPTAG::COMMON {
 class TruthSet {
    public:
-    static void LoadTruthTXT(std::shared_ptr<SPTAG::Helper::DiskIO>& ptr, std::vector<std::set<SizeType>>& truth, int K, int& originalK, SizeType& p_iTruthNumber) {
-        std::size_t lineBufferSize = 20;
-        std::unique_ptr<char[]> currentLine(new char[lineBufferSize]);
-        truth.clear();
-        truth.resize(p_iTruthNumber);
-        for (int i = 0; i < p_iTruthNumber; ++i) {
-            truth[i].clear();
-            if (ptr->ReadString(lineBufferSize, currentLine, '\n') == 0) {
-                LOG(Helper::LogLevel::LL_Error, "Truth number(%d) and query number(%d) are not match!\n", i, p_iTruthNumber);
-                exit(1);
-            }
-            char* tmp = strtok(currentLine.get(), " ");
-            for (int j = 0; j < K; ++j) {
-                if (tmp == nullptr) {
-                    LOG(Helper::LogLevel::LL_Error, "Truth number(%d, %d) and query number(%d) are not match!\n", i, j, p_iTruthNumber);
-                    exit(1);
-                }
-                int vid = std::atoi(tmp);
-                if (vid >= 0)
-                    truth[i].insert(vid);
-                tmp = strtok(nullptr, " ");
-            }
-        }
-    }
-
-    static void LoadTruthXVEC(std::shared_ptr<SPTAG::Helper::DiskIO>& ptr, std::vector<std::set<SizeType>>& truth, int K, int& originalK, SizeType& p_iTruthNumber) {
-        truth.clear();
-        truth.resize(p_iTruthNumber);
-        std::vector<int> vec(K);
-        for (int i = 0; i < p_iTruthNumber; i++) {
-            if (ptr->ReadBinary(4, (char*)&originalK) != 4 || originalK < K) {
-                LOG(Helper::LogLevel::LL_Error, "Error: Xvec file has No.%d vector whose dims are fewer than expected. Expected: %d, Fact: %d\n", i, K, originalK);
-                exit(1);
-            }
-            if (originalK > K)
-                vec.resize(originalK);
-            if (ptr->ReadBinary(originalK * 4, (char*)vec.data()) != originalK * 4) {
-                LOG(Helper::LogLevel::LL_Error, "Truth number(%d) and query number(%d) are not match!\n", i, p_iTruthNumber);
-                exit(1);
-            }
-            truth[i].insert(vec.begin(), vec.begin() + K);
-        }
-    }
-
     static void LoadTruthDefault(std::shared_ptr<SPTAG::Helper::DiskIO>& ptr, std::vector<std::set<SizeType>>& truth, int K, int& originalK, SizeType& p_iTruthNumber) {
         if (ptr->TellP() == 0) {
             int row;
@@ -75,11 +31,7 @@ class TruthSet {
     }
 
     static void LoadTruth(std::shared_ptr<SPTAG::Helper::DiskIO>& ptr, std::vector<std::set<SizeType>>& truth, SizeType& NumQuerys, int& originalK, int K, TruthFileType type) {
-        if (type == TruthFileType::TXT) {
-            LoadTruthTXT(ptr, truth, K, originalK, NumQuerys);
-        } else if (type == TruthFileType::XVEC) {
-            LoadTruthXVEC(ptr, truth, K, originalK, NumQuerys);
-        } else if (type == TruthFileType::DEFAULT) {
+        if (type == TruthFileType::DEFAULT) {
             LoadTruthDefault(ptr, truth, K, originalK, NumQuerys);
         } else {
             LOG(Helper::LogLevel::LL_Error, "TruthFileType Unsupported.\n");
@@ -94,27 +46,7 @@ class TruthSet {
             exit(1);
         }
 
-        if (TFT == SPTAG::TruthFileType::TXT) {
-            for (SizeType i = 0; i < queryNumber; i++) {
-                for (int k = 0; k < K; k++) {
-                    if (ptr->WriteString((std::to_string(truthset[i][k]) + " ").c_str()) == 0) {
-                        LOG(Helper::LogLevel::LL_Error, "Fail to write the truth file!\n");
-                        exit(1);
-                    }
-                }
-                if (ptr->WriteString("\n") == 0) {
-                    LOG(Helper::LogLevel::LL_Error, "Fail to write the truth file!\n");
-                    exit(1);
-                }
-            }
-        } else if (TFT == SPTAG::TruthFileType::XVEC) {
-            for (SizeType i = 0; i < queryNumber; i++) {
-                if (ptr->WriteBinary(sizeof(K), (char*)&K) != sizeof(K) || ptr->WriteBinary(K * 4, (char*)(truthset[i].data())) != K * 4) {
-                    LOG(Helper::LogLevel::LL_Error, "Fail to write the truth file!\n");
-                    exit(1);
-                }
-            }
-        } else if (TFT == SPTAG::TruthFileType::DEFAULT) {
+        if (TFT == SPTAG::TruthFileType::DEFAULT) {
             ptr->WriteBinary(4, (char*)&queryNumber);
             ptr->WriteBinary(4, (char*)&K);
 
