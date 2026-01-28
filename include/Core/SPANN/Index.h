@@ -274,9 +274,9 @@ class Index {
     void SelectHeadDynamically(const std::shared_ptr<COMMON::BKTree> p_tree, int p_vectorCount, std::vector<int>& p_selected);
 
     template <typename InternalDataType>
-    bool SelectHeadInternal(std::shared_ptr<Helper::VectorSetReader>& p_reader);
+    bool SelectHeadInternal(std::shared_ptr<Helper::VectorSetReader<T>>& p_reader);
 
-    ErrorCode BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>& p_reader);
+    ErrorCode BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader<T>>& p_reader);
 
    public:
     bool AllFinished() {

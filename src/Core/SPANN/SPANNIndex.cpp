@@ -174,8 +174,7 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     }
 
     if (m_options.m_preReassign) {
-        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(m_options.m_valueType, m_options.m_dim, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads));
-        auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
+        auto vectorReader = Helper::VectorSetReader<T>::CreateInstance(m_options.m_vectorSize, m_options.m_dim, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads);
         if (m_options.m_vectorPath.empty()) {
             LOG(Helper::LogLevel::LL_Info, "Vector file is empty. Skipping loading.\n");
         } else {
@@ -183,7 +182,6 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
                 LOG(Helper::LogLevel::LL_Error, "Failed to read vector file.\n");
                 return ErrorCode::Fail;
             }
-            // m_options.m_vectorSize = vectorReader->GetVectorSet()->Count();
         }
         m_extraSearcher->RefineIndex(vectorReader, m_index);
     }
@@ -580,7 +578,7 @@ void Index<T>::SelectHeadDynamically(const std::shared_ptr<COMMON::BKTree> p_tre
 
 template <typename T>
 template <typename InternalDataType>
-bool Index<T>::SelectHeadInternal(std::shared_ptr<Helper::VectorSetReader>& p_reader) {
+bool Index<T>::SelectHeadInternal(std::shared_ptr<Helper::VectorSetReader<T>>& p_reader) {
     std::shared_ptr<VectorSet> vectorset = p_reader->GetVectorSet();
     if (m_options.m_distCalcMethod == DistCalcMethod::Cosine && !p_reader->IsNormalized())
         vectorset->Normalize(m_options.m_iSelectHeadNumberOfThreads);
@@ -687,7 +685,7 @@ bool Index<T>::SelectHeadInternal(std::shared_ptr<Helper::VectorSetReader>& p_re
 }
 
 template <typename T>
-ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>& p_reader) {
+ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader<T>>& p_reader) {
     if (!m_options.m_indexDirectory.empty()) {
         if (!direxists(m_options.m_indexDirectory.c_str())) {
             mkdir(m_options.m_indexDirectory.c_str());
@@ -722,7 +720,7 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
         }
 
         std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dims));
-        auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
+        auto vectorReader = Helper::VectorSetReader<T>::CreateInstance(0, dims, m_options.m_vectorDelimiter);
         if (ErrorCode::Success != vectorReader->LoadFile(m_options.m_indexDirectory + FolderSep + m_options.m_headVectorFile)) {
             LOG(Helper::LogLevel::LL_Error, "Failed to read head vector file.\n");
             return ErrorCode::Fail;
@@ -841,7 +839,7 @@ ErrorCode Index<T>::BuildIndex(bool p_normalized) {
     SPTAG::VectorValueType valueType = m_options.m_valueType;
     SizeType dim = m_options.m_dim;
     std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dim, m_options.m_vectorDelimiter, m_options.m_iSSDNumberOfThreads, p_normalized));
-    auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
+    auto vectorReader = Helper::VectorSetReader<T>::CreateInstance(0, m_options.m_dim, m_options.m_vectorDelimiter);
     if (m_options.m_vectorPath.empty()) {
         LOG(Helper::LogLevel::LL_Info, "Vector file is empty. Skipping loading.\n");
     } else {

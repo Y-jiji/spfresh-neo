@@ -365,7 +365,7 @@ class ExtraStaticSearcher {
         return postingListFullData;
     }
 
-    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<BKT::Index<ValueType>> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
+    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader<ValueType>>& p_reader, std::shared_ptr<BKT::Index<ValueType>> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
         std::string outputFile = p_opt.m_indexDirectory + FolderSep + p_opt.m_ssdIndex;
         if (outputFile.empty()) {
             LOG(Helper::LogLevel::LL_Error, "Output file can't be empty!\n");

@@ -10,6 +10,9 @@
 #include "Helper/ArgumentsParser.h"
 
 #include <memory>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 namespace SPTAG::Helper {
 
@@ -30,9 +33,10 @@ class ReaderOptions : public ArgumentsParser {
     bool m_normalized;
 };
 
-class VectorSetReader {
+template <typename T>
+class VectorSetReader : public std::enable_shared_from_this<VectorSetReader<T>> {
    public:
-    VectorSetReader(std::shared_ptr<ReaderOptions> p_options);
+    VectorSetReader(SizeType size, DimensionType dim, std::string p_vectorDelimiter = "|", std::uint32_t p_threadNum = 32, bool p_normalized = false);
 
     virtual ~VectorSetReader();
 
@@ -43,19 +47,31 @@ class VectorSetReader {
     virtual std::shared_ptr<MetadataSet> GetMetadataSet() const;
 
     virtual bool IsNormalized() const {
-        return m_options->m_normalized;
+        return m_normalized;
     }
 
-    static std::shared_ptr<VectorSetReader> CreateInstance(std::shared_ptr<ReaderOptions> p_options);
+    static std::shared_ptr<VectorSetReader<T>> CreateInstance(SizeType size, DimensionType dim, std::string p_vectorDelimiter = "|", std::uint32_t p_threadNum = 32, bool p_normalized = false);
 
    protected:
-    std::shared_ptr<ReaderOptions> m_options;
+    SizeType m_size;
+
+    DimensionType m_dim;
+
+    std::string m_vectorDelimiter;
+
+    std::uint32_t m_threadNum;
+
+    bool m_normalized;
 
     std::string m_vectorOutput;
 
     std::string m_metadataConentOutput;
 
     std::string m_metadataIndexOutput;
+
+    void* m_mappedData;
+    size_t m_fileSize;
+    int m_fd;
 };
 
 }  // namespace SPTAG::Helper

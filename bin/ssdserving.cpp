@@ -221,7 +221,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
     if (!warmupFile.empty()) {
         LOG(Helper::LogLevel::LL_Info, "Start loading warmup query set...\n");
         std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_warmupDelimiter));
-        auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
+        auto queryReader = Helper::VectorSetReader<ValueType>::CreateInstance(p_opts.m_querySize, p_opts.m_dim, p_opts.m_queryDelimiter);
         if (ErrorCode::Success != queryReader->LoadFile(p_opts.m_warmupPath)) {
             LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
             exit(1);
@@ -243,7 +243,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
 
     LOG(Helper::LogLevel::LL_Info, "Start loading QuerySet...\n");
     std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryDelimiter));
-    auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
+    auto queryReader = Helper::VectorSetReader<ValueType>::CreateInstance(p_opts.m_querySize, p_opts.m_dim, p_opts.m_queryDelimiter);
     if (ErrorCode::Success != queryReader->LoadFile(p_opts.m_queryPath)) {
         LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
         exit(1);
@@ -268,7 +268,7 @@ void Search(SPANN::Index<ValueType>* p_index) {
 
     if (!p_opts.m_vectorPath.empty() && fileexists(p_opts.m_vectorPath.c_str())) {
         std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorDelimiter));
-        auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
+        auto vectorReader = Helper::VectorSetReader<ValueType>::CreateInstance(p_opts.m_vectorSize, p_opts.m_dim, p_opts.m_vectorDelimiter);
         if (ErrorCode::Success == vectorReader->LoadFile(p_opts.m_vectorPath)) {
             vectorSet = vectorReader->GetVectorSet();
             if (p_opts.m_distCalcMethod == DistCalcMethod::Cosine)
@@ -621,22 +621,50 @@ int BootProgram(std::map<std::string, std::map<std::string, std::string>>* confi
     if (opts->m_generateTruth) {
         LOG(Helper::LogLevel::LL_Info, "Start generating truth. It's maybe a long time.\n");
         SPTAG::SizeType dim = opts->m_dim;
-        std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(valueType, dim, opts->m_vectorDelimiter));
-        auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
-        if (SPTAG::ErrorCode::Success != vectorReader->LoadFile(opts->m_vectorPath)) {
-            LOG(Helper::LogLevel::LL_Error, "Failed to read vector file.\n");
-            exit(1);
+        LOG(Helper::LogLevel::LL_Info, "Start loading VectorSet...\n");
+        std::shared_ptr<SPTAG::VectorSet> vectorSet;
+        std::shared_ptr<SPTAG::VectorSet> querySet;
+        if (!opts->m_vectorPath.empty() && fileexists(opts->m_vectorPath.c_str())) {
+            switch (valueType) {
+#define DefineVectorValueType(Name, Type)                                                                                    \
+    case SPTAG::VectorValueType::Name: {                                                                                     \
+        auto vectorReader = Helper::VectorSetReader<Type>::CreateInstance(opts->m_vectorSize, dim, opts->m_vectorDelimiter); \
+        if (SPTAG::ErrorCode::Success != vectorReader->LoadFile(opts->m_vectorPath)) {                                       \
+            LOG(Helper::LogLevel::LL_Error, "Failed to read vector file.\n");                                                \
+            exit(1);                                                                                                         \
+        }                                                                                                                    \
+        vectorSet = vectorReader->GetVectorSet();                                                                            \
+        break;                                                                                                               \
+    }
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+                default:
+                    LOG(Helper::LogLevel::LL_Error, "Unknown ValueType\n");
+                    exit(1);
+            }
         }
-        std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(opts->m_valueType, opts->m_dim, opts->m_queryDelimiter));
-        auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
-        if (SPTAG::ErrorCode::Success != queryReader->LoadFile(opts->m_queryPath)) {
-            LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
-            exit(1);
+        LOG(Helper::LogLevel::LL_Info, "Start loading QuerySet...\n");
+        if (!opts->m_queryPath.empty() && fileexists(opts->m_queryPath.c_str())) {
+            switch (valueType) {
+#define DefineVectorValueType(Name, Type)                                                                                 \
+    case SPTAG::VectorValueType::Name: {                                                                                  \
+        auto queryReader = Helper::VectorSetReader<Type>::CreateInstance(opts->m_querySize, dim, opts->m_queryDelimiter); \
+        if (SPTAG::ErrorCode::Success != queryReader->LoadFile(opts->m_queryPath)) {                                      \
+            LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");                                              \
+            exit(1);                                                                                                      \
+        }                                                                                                                 \
+        querySet = queryReader->GetVectorSet();                                                                           \
+        break;                                                                                                            \
+    }
+#include "Core/DefinitionList.h"
+#undef DefineVectorValueType
+                default:
+                    LOG(Helper::LogLevel::LL_Error, "Unknown ValueType\n");
+                    exit(1);
+            }
         }
-        auto vectorSet = vectorReader->GetVectorSet();
-        auto querySet = queryReader->GetVectorSet();
-        if (distCalcMethod == SPTAG::DistCalcMethod::Cosine)
-            vectorSet->Normalize(opts->m_iSSDNumberOfThreads);
+        if (distCalcMethod == SPTAG::DistCalcMethod::Cosine && querySet)
+            querySet->Normalize(opts->m_iSSDNumberOfThreads);
     }
 
     if (searchSSD) {

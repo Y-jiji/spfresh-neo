@@ -374,13 +374,13 @@ std::string GetTruthFileName(std::string& truthFilePrefix, int vectorCount) {
     return fileName;
 }
 
+template <typename ValueType>
 std::shared_ptr<SPTAG::VectorSet> LoadVectorSet(SPANN::Options& p_opts, int numThreads) {
     std::shared_ptr<SPTAG::VectorSet> vectorSet;
     if (p_opts.m_loadAllVectors) {
         LOG(Helper::LogLevel::LL_Info, "Start loading VectorSet...\n");
         if (!p_opts.m_fullVectorPath.empty() && fileexists(p_opts.m_fullVectorPath.c_str())) {
-            std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorDelimiter));
-            auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
+            auto vectorReader = Helper::VectorSetReader<ValueType>::CreateInstance(p_opts.m_vectorSize, p_opts.m_dim, p_opts.m_vectorDelimiter);
             if (SPTAG::ErrorCode::Success == vectorReader->LoadFile(p_opts.m_fullVectorPath)) {
                 vectorSet = vectorReader->GetVectorSet();
                 if (p_opts.m_distCalcMethod == SPTAG::DistCalcMethod::Cosine)
@@ -431,10 +431,10 @@ std::shared_ptr<SPTAG::VectorSet> LoadUpdateVectors(SPANN::Options& p_opts, std:
     return std::make_shared<SPTAG::BasicVectorSet>(vectorSet, p_opts.m_valueType, col, updateSize);
 }
 
+template <typename ValueType>
 std::shared_ptr<VectorSet> LoadQuerySet(SPANN::Options& p_opts) {
     LOG(Helper::LogLevel::LL_Info, "Start loading QuerySet...\n");
-    std::shared_ptr<Helper::ReaderOptions> queryOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_queryDelimiter));
-    auto queryReader = Helper::VectorSetReader::CreateInstance(queryOptions);
+    auto queryReader = Helper::VectorSetReader<ValueType>::CreateInstance(p_opts.m_querySize, p_opts.m_dim, p_opts.m_queryDelimiter);
     if (SPTAG::ErrorCode::Success != queryReader->LoadFile(p_opts.m_queryPath)) {
         LOG(Helper::LogLevel::LL_Error, "Failed to read query file.\n");
         exit(1);
@@ -748,9 +748,9 @@ void SteadyStateSPFresh(SPANN::Index<ValueType>* p_index) {
     int internalResultNum = p_opts.m_searchInternalResultNum;
     int searchTimes = p_opts.m_searchTimes;
 
-    auto vectorSet = LoadVectorSet(p_opts, numThreads);
+    auto vectorSet = LoadVectorSet<ValueType>(p_opts, numThreads);
 
-    auto querySet = LoadQuerySet(p_opts);
+    auto querySet = LoadQuerySet<ValueType>(p_opts);
 
     int curCount = p_index->GetNumSamples();
 
@@ -946,9 +946,9 @@ void UpdateSPFresh(SPANN::Index<ValueType>* p_index) {
     int internalResultNum = p_opts.m_searchInternalResultNum;
     int searchTimes = p_opts.m_searchTimes;
 
-    auto vectorSet = LoadVectorSet(p_opts, numThreads);
+    auto vectorSet = LoadVectorSet<ValueType>(p_opts, numThreads);
 
-    auto querySet = LoadQuerySet(p_opts);
+    auto querySet = LoadQuerySet<ValueType>(p_opts);
 
     int curCount = p_index->GetNumSamples();
     int insertCount = vectorSet->Count() - curCount;

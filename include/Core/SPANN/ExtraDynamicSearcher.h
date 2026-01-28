@@ -378,7 +378,7 @@ class ExtraDynamicSearcher {
     }
 
     // TODO
-    void RefineIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index) {
+    void RefineIndex(std::shared_ptr<Helper::VectorSetReader<ValueType>>& p_reader, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_index) {
         LOG(Helper::LogLevel::LL_Info, "Begin PreReassign\n");
         std::atomic_bool doneReassign = false;
         // p_index->UpdateIndex();
@@ -1155,7 +1155,7 @@ class ExtraDynamicSearcher {
         }
     }
 
-    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader>& p_reader, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
+    bool BuildIndex(std::shared_ptr<Helper::VectorSetReader<ValueType>>& p_reader, std::shared_ptr<SPTAG::BKT::Index<ValueType>> p_headIndex, Options& p_opt, COMMON::VersionLabel& p_versionMap, SizeType upperBound = -1) {
         m_versionMap = &p_versionMap;
         m_opt = &p_opt;
 
