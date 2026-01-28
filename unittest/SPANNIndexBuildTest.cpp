@@ -32,14 +32,6 @@ bool SaveVectorsToBinaryFile(const std::vector<T>& data, int numVectors, int dim
         return false;
     }
 
-    // Write number of vectors (row count)
-    SPTAG::SizeType row = numVectors;
-    out.write(reinterpret_cast<const char*>(&row), sizeof(SPTAG::SizeType));
-
-    // Write dimension (column count)
-    SPTAG::DimensionType col = dimension;
-    out.write(reinterpret_cast<const char*>(&col), sizeof(SPTAG::DimensionType));
-
     // Write vector data
     out.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(T));
 

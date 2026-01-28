@@ -58,50 +58,17 @@ SPTAG::BasicVectorSet::Save(const std::string& p_vectorFile) const {
     if (fp == nullptr || !fp->Initialize(p_vectorFile.c_str(), std::ios::binary | std::ios::out))
         return SPTAG::ErrorCode::FailedOpenFile;
 
-    IOBINARY(fp, WriteBinary, sizeof(SPTAG::SizeType), (char*)&m_vectorCount);
-    IOBINARY(fp, WriteBinary, sizeof(SPTAG::DimensionType), (char*)&m_dimension);
     IOBINARY(fp, WriteBinary, m_data.Length(), (char*)m_data.Data());
     return SPTAG::ErrorCode::Success;
 }
 
-SPTAG::ErrorCode SPTAG::BasicVectorSet::AppendSave(const std::string& p_vectorFile) const {
-    auto append = fileexists(p_vectorFile.c_str());
+SPTAG::ErrorCode
+SPTAG::BasicVectorSet::AppendSave(const std::string& p_vectorFile) const {
+    auto fp_append = SPTAG::f_createIO();
+    if (fp_append == nullptr || !fp_append->Initialize(p_vectorFile.c_str(), std::ios::binary | std::ios::out | std::ios::app))
+        return SPTAG::ErrorCode::FailedOpenFile;
 
-    SPTAG::SizeType count;
-    SPTAG::SizeType dim;
-
-    // Get count based on already written results
-    if (append) {
-        auto fp_read = SPTAG::f_createIO();
-        if (fp_read == nullptr || !fp_read->Initialize(p_vectorFile.c_str(), std::ios::binary | std::ios::in))
-            return SPTAG::ErrorCode::FailedOpenFile;
-        IOBINARY(fp_read, ReadBinary, sizeof(SPTAG::SizeType), (char*)&count);
-        IOBINARY(fp_read, ReadBinary, sizeof(SPTAG::DimensionType), (char*)&dim);
-        if (dim != m_dimension) {
-            return SPTAG::ErrorCode::DimensionSizeMismatch;
-        }
-        count += m_vectorCount;
-    } else {
-        count = m_vectorCount;
-        dim = m_dimension;
-    }
-
-    // Update count header
-    {
-        auto fp_write = SPTAG::f_createIO();
-        if (fp_write == nullptr || !fp_write->Initialize(p_vectorFile.c_str(), std::ios::binary | std::ios::out | (append ? std::ios::in : 0)))
-            return SPTAG::ErrorCode::FailedOpenFile;
-        IOBINARY(fp_write, WriteBinary, sizeof(SPTAG::SizeType), (char*)&count);
-        IOBINARY(fp_write, WriteBinary, sizeof(SPTAG::DimensionType), (char*)&dim);
-    }
-
-    // Write new vectors to end of file
-    {
-        auto fp_append = SPTAG::f_createIO();
-        if (fp_append == nullptr || !fp_append->Initialize(p_vectorFile.c_str(), std::ios::binary | std::ios::out | std::ios::app))
-            return SPTAG::ErrorCode::FailedOpenFile;
-        IOBINARY(fp_append, WriteBinary, m_data.Length(), (char*)m_data.Data());
-    }
+    IOBINARY(fp_append, WriteBinary, m_data.Length(), (char*)m_data.Data());
 
     return SPTAG::ErrorCode::Success;
 }

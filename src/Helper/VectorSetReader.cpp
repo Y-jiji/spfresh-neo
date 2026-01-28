@@ -71,15 +71,6 @@ SPTAG::Helper::VectorSetReader<T>::LoadFile(const std::string& p_filePaths) {
         throw std::runtime_error("Failed to mmap file");
     }
 
-    if (m_size <= 0 && m_fileSize >= sizeof(SPTAG::SizeType) + sizeof(SPTAG::DimensionType)) {
-        m_size = *reinterpret_cast<const SPTAG::SizeType*>(m_mappedData);
-        SPTAG::DimensionType fileDim = *reinterpret_cast<const SPTAG::DimensionType*>(
-            static_cast<const std::uint8_t*>(m_mappedData) + sizeof(SPTAG::SizeType));
-        if (m_dim <= 0) {
-            m_dim = fileDim;
-        }
-    }
-
     return ErrorCode::Success;
 }
 
