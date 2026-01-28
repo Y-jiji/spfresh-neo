@@ -50,6 +50,13 @@ target_include_directories(ssdserving PRIVATE
     $<INSTALL_INTERFACE:include>
 )
 
+add_executable(tape bin/tape.cpp)
+target_link_libraries(tape PRIVATE Boost::headers SPTAGLib)
+target_include_directories(tape PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
 add_executable(BKTSerializationTest unittest/BKTSerializationTest.cpp)
 target_link_libraries(BKTSerializationTest PRIVATE SPTAGLib)
 target_include_directories(BKTSerializationTest PRIVATE
@@ -86,3 +93,21 @@ set_property(TEST SPANNIndexBuildTest PROPERTY ENVIRONMENT_MODIFICATION
     "SPFRESH_SPDK_BDEV=set:Uring0"
     "DPDK_IOVA_MODE=set:va"
 )
+
+add_executable(TracePlayerParallelTest unittest/TracePlayerParallelTest.cpp)
+target_link_libraries(TracePlayerParallelTest PRIVATE SPTAGLib)
+target_include_directories(TracePlayerParallelTest PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+add_test(NAME TracePlayerParallelTest COMMAND TracePlayerParallelTest)
+set_tests_properties(TracePlayerParallelTest PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=/usr/local/lib")
+
+add_executable(ResultWriterParallelTest unittest/ResultWriterParallelTest.cpp)
+target_link_libraries(ResultWriterParallelTest PRIVATE SPTAGLib)
+target_include_directories(ResultWriterParallelTest PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+add_test(NAME ResultWriterParallelTest COMMAND ResultWriterParallelTest)
+set_tests_properties(ResultWriterParallelTest PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=/usr/local/lib")

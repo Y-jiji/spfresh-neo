@@ -175,15 +175,28 @@ bool TestSPANNIndexBuild() {
     }
     std::cout << "  PASSED: Disk index (SSD index) exists" << std::endl;
 
-    std::cout << "  NOTE: Search functionality test skipped due to segfault issue" << std::endl;
-    std::cout << "  The search test is a separate concern from build verification" << std::endl;
+    std::cout << "  Testing insertion of 100 random vectors..." << std::endl;
+    const int numInsertVectors = 100;
+    std::vector<T> insertData;
+    GenerateRandomVectors(insertData, numInsertVectors, dimension);
 
-    std::cout << "  Cleaning up test directory..." << std::endl;
-    try {
-        std::filesystem::remove_all(testDir);
-    } catch (const std::exception& e) {
-        std::cout << "  Warning: Could not remove test directory: " << e.what() << std::endl;
+    ErrorCode insertRet = index->AddIndex(insertData.data(), numInsertVectors, dimension, nullptr, false, false);
+
+    if (insertRet != ErrorCode::Success) {
+        std::cerr << "  FAILED: AddIndex returned error code: " << static_cast<int>(insertRet) << std::endl;
+        return false;
     }
+    std::cout << "  PASSED: AddIndex succeeded" << std::endl;
+
+    SizeType newTotalVectors = index->GetNumSamples();
+    SizeType expectedTotal = numVectors + numInsertVectors;
+    if (newTotalVectors != expectedTotal) {
+        std::cerr << "  FAILED: Expected " << expectedTotal << " total vectors after insertion, got " << newTotalVectors << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED: Total vector count matches expected (" << expectedTotal << " vectors)" << std::endl;
+
+    std::cout << "  NOTE: Skipping cleanup to avoid interfering with SPDK files" << std::endl;
 
     return true;
 }
