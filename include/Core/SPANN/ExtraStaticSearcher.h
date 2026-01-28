@@ -10,11 +10,13 @@
 #include "Core/Common/TruthSet.h"
 #include "Core/BKT/Index.h"
 #include "Compressor.h"
+#include "Core/Common/VersionLabel.h"
+#include "Core/SPANN/Options.h"
+#include "Utils/SIMDUtils.h"
 
 #include <map>
 #include <cmath>
 #include <climits>
-#include <future>
 #include <numeric>
 
 namespace SPTAG::SPANN {

@@ -26,8 +26,10 @@ namespace SPTAG::SPANN {
 typedef std::int64_t AddressType;
 class SPDKIO {
     class BlockController {
-       private:
+       public:
         static constexpr AddressType kMaxNumBlocks = 1700 * 1024 * 256;  // 1.7T
+
+       private:
         static constexpr const char* kSpdkConfEnv = "SPFRESH_SPDK_CONF";
         static constexpr const char* kSpdkBdevNameEnv = "SPFRESH_SPDK_BDEV";
         static constexpr const char* kSpdkIoDepth = "SPFRESH_SPDK_IO_DEPTH";
@@ -87,7 +89,7 @@ class SPDKIO {
         static void SpdkStop(void* args);
 
        public:
-        bool Initialize(int batchSize);
+        bool Initialize(int batchSize, AddressType maxBlocks = kMaxNumBlocks);
 
         // get p_size blocks from front, and fill in p_data array
         bool GetBlocks(AddressType* p_data, int p_size);
@@ -130,7 +132,7 @@ class SPDKIO {
     };
 
    public:
-    SPDKIO(const char* filePath, SizeType blockSize, SizeType capacity, SizeType postingBlocks, SizeType bufferSize = 1024, int batchSize = 64, int compactionThreads = 1) {
+    SPDKIO(const char* filePath, SizeType blockSize, SizeType capacity, SizeType postingBlocks, SizeType bufferSize = 1024, int batchSize = 64, int compactionThreads = 1, AddressType maxBlocks = BlockController::kMaxNumBlocks) {
         m_mappingPath = std::string(filePath);
         m_blockLimit = postingBlocks + 1;
         m_bufferLimit = bufferSize;
@@ -144,7 +146,7 @@ class SPDKIO {
         }
         m_compactionThreadPool = std::make_shared<Helper::ThreadPool>();
         m_compactionThreadPool->init(compactionThreads);
-        m_pBlockController.Initialize(batchSize);
+        m_pBlockController.Initialize(batchSize, maxBlocks);
         m_shutdownCalled = false;
     }
 

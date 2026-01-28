@@ -4,16 +4,13 @@
 #ifndef _SPTAG_SPANN_IEXTRASEARCHER_H_
 #define _SPTAG_SPANN_IEXTRASEARCHER_H_
 
-#include "Options.h"
-
-#include "Core/Common/VersionLabel.h"
+#include "Core/Common/WorkSpace.h"
 #include "Helper/AsyncFileReader.h"
 
 #include <memory>
 #include <vector>
 #include <chrono>
 #include <atomic>
-#include <set>
 
 namespace SPTAG::SPANN {
 

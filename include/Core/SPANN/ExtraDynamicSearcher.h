@@ -7,6 +7,7 @@
 #include "Helper/VectorSetReader.h"
 #include "Helper/AsyncFileReader.h"
 #include "IExtraSearcher.h"
+#include "Core/Common/VersionLabel.h"
 #include "ExtraStaticSearcher.h"
 #include "Core/Common/TruthSet.h"
 #include "Core/Common/FineGrainedLock.h"
@@ -150,8 +151,8 @@ class ExtraDynamicSearcher {
     tbb::concurrent_hash_map<SizeType, SizeType> m_mergeList;
 
    public:
-    ExtraDynamicSearcher(const char* dbPath, int dim, int postingBlockLimit, bool useDirectIO, float searchLatencyHardLimit, int mergeThreshold, int batchSize = 64, int bufferLength = 3) {
-        db.reset(new SPDKIO(dbPath, 1024 * 1024, MaxSize, postingBlockLimit + bufferLength, 1024, batchSize));
+    ExtraDynamicSearcher(const char* dbPath, int dim, int postingBlockLimit, bool useDirectIO, float searchLatencyHardLimit, int mergeThreshold, int batchSize = 64, int bufferLength = 3, SizeType capacity = 1000000) {
+        db.reset(new SPDKIO(dbPath, 1024 * 1024, capacity, postingBlockLimit + bufferLength, 1024, batchSize, 1, capacity * 2));
         m_postingSizeLimit = postingBlockLimit * PageSize / (sizeof(ValueType) * dim + sizeof(int) + sizeof(uint8_t));
         m_metaDataSize = sizeof(int) + sizeof(uint8_t);
         m_vectorInfoSize = dim * sizeof(ValueType) + m_metaDataSize;

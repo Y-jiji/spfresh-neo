@@ -23,6 +23,7 @@
 #include "Helper/ConcurrentSet.h"
 #include "Helper/VectorSetReader.h"
 
+#include "Core/Common/VersionLabel.h"
 #include "ExtraDynamicSearcher.h"
 #include "Options.h"
 

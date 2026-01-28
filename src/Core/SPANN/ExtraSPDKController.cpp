@@ -135,13 +135,13 @@ void* SPDKIO::BlockController::InitializeSpdk(void* arg) {
     pthread_exit(NULL);
 }
 
-bool SPDKIO::BlockController::Initialize(int batchSize) {
+bool SPDKIO::BlockController::Initialize(int batchSize, AddressType maxBlocks) {
     std::lock_guard<std::mutex> lock(m_initMutex);
     m_numInitCalled++;
 
     if (m_numInitCalled == 1) {
         m_batchSize = batchSize;
-        for (AddressType i = 0; i < kMaxNumBlocks; i++) {
+        for (AddressType i = 0; i < maxBlocks; i++) {
             m_blockAddresses.push(i);
         }
         pthread_create(&m_ssdSpdkTid, NULL, &InitializeSpdk, this);

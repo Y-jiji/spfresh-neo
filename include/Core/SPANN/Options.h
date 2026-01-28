@@ -90,6 +90,7 @@ class Options {
     float m_rngFactor;
     int m_samples;
     bool m_excludehead;
+    SizeType m_spdkCapacity;
     std::string m_spdkMappingPath;
     std::string m_ssdInfoFile;
     bool m_useDirectIO;

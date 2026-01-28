@@ -70,7 +70,7 @@ ErrorCode Index<T>::LoadIndexDataFromMemory(const std::vector<ByteArray>& p_inde
     m_index->UpdateIndex();
     m_index->SetReady(true);
 
-    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
+    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength, m_options.m_spdkCapacity));
 
     if (!m_extraSearcher->LoadIndex(m_options, m_versionMap))
         return ErrorCode::Fail;
@@ -93,7 +93,7 @@ ErrorCode Index<T>::LoadIndexData(const std::vector<std::shared_ptr<Helper::Disk
     m_index->UpdateIndex();
     m_index->SetReady(true);
 
-    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength));
+    m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_bufferLength, m_options.m_spdkCapacity));
 
     if (!m_extraSearcher->LoadIndex(m_options, m_versionMap))
         return ErrorCode::Fail;
@@ -774,7 +774,7 @@ ErrorCode Index<T>::BuildIndexInternal(std::shared_ptr<Helper::VectorSetReader>&
             LOG(Helper::LogLevel::LL_Info, "Currently unsupport SPDK with inplace!\n");
             exit(1);
         }
-        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize));
+        m_extraSearcher.reset(new ExtraDynamicSearcher<T>(m_options.m_spdkMappingPath.c_str(), m_options.m_dim, m_options.m_postingPageLimit, m_options.m_useDirectIO, m_options.m_latencyLimit, m_options.m_mergeThreshold, m_options.m_spdkBatchSize, m_options.m_spdkCapacity));
 
         if (m_options.m_buildSsdIndex) {
             if (!m_options.m_excludehead) {

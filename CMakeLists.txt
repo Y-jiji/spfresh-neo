@@ -72,3 +72,17 @@ set_property(TEST ExtraSPDKControllerTest PROPERTY ENVIRONMENT_MODIFICATION
     "SPFRESH_SPDK_BDEV=set:Uring0"
     "DPDK_IOVA_MODE=set:va"
 )
+
+add_executable(SPANNIndexBuildTest unittest/SPANNIndexBuildTest.cpp)
+target_link_libraries(SPANNIndexBuildTest PRIVATE SPTAGLib)
+target_include_directories(SPANNIndexBuildTest PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+add_test(NAME SPANNIndexBuildTest COMMAND SPANNIndexBuildTest)
+set_property(TEST SPANNIndexBuildTest PROPERTY ENVIRONMENT_MODIFICATION
+    "LD_LIBRARY_PATH=set:/usr/local/lib"
+    "SPFRESH_SPDK_CONF=set:${CMAKE_CURRENT_SOURCE_DIR}/script/bdev-uring.json"
+    "SPFRESH_SPDK_BDEV=set:Uring0"
+    "DPDK_IOVA_MODE=set:va"
+)
