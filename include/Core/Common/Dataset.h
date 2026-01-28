@@ -5,6 +5,7 @@
 #define _SPTAG_COMMON_DATASET_H_
 
 #include "Core/Common.h"
+#include <atomic>
 #include <string>
 #include <memory>
 #include <vector>
@@ -224,7 +225,7 @@ class Dataset {
     DimensionType cols = 1;
     char* data = nullptr;
     bool ownData = false;
-    SizeType incRows = 0;
+    std::atomic<SizeType> incRows{0};
     SizeType maxRows;
     SizeType rowsInBlock;
     SizeType rowsInBlockEx;
@@ -295,15 +296,15 @@ class Dataset {
 
     void SetR(SizeType R_) {
         if (R_ >= rows)
-            incRows = R_ - rows;
+            incRows.store(R_ - rows, std::memory_order_release);
         else {
             rows = R_;
-            incRows = 0;
+            incRows.store(0, std::memory_order_release);
         }
     }
 
     inline SizeType R() const {
-        return rows + incRows;
+        return rows + incRows.load(std::memory_order_acquire);
     }
     inline const DimensionType& C() const {
         return mycols;
@@ -341,9 +342,10 @@ class Dataset {
         if (R() > maxRows - num)
             return ErrorCode::MemoryOverFlow;
 
+        SizeType currentIncRows = incRows.load(std::memory_order_acquire);
         SizeType written = 0;
         while (written < num) {
-            SizeType curBlockIdx = ((incRows + written) >> rowsInBlockEx);
+            SizeType curBlockIdx = ((currentIncRows + written) >> rowsInBlockEx);
             if (curBlockIdx >= (SizeType)(incBlocks->size())) {
                 char* newBlock = (char*)ALIGN_ALLOC(((size_t)rowsInBlock + 1) * cols);
                 if (newBlock == nullptr)
@@ -351,7 +353,7 @@ class Dataset {
                 std::memset(newBlock, -1, ((size_t)rowsInBlock + 1) * cols);
                 incBlocks->push_back(newBlock);
             }
-            SizeType curBlockPos = ((incRows + written) & rowsInBlock);
+            SizeType curBlockPos = ((currentIncRows + written) & rowsInBlock);
             SizeType toWrite = min(rowsInBlock + 1 - curBlockPos, num - written);
             if (pData) {
                 for (int i = 0; i < toWrite; i++) {
@@ -360,7 +362,7 @@ class Dataset {
             }
             written += toWrite;
         }
-        incRows += written;
+        incRows.fetch_add(written, std::memory_order_release);
         return ErrorCode::Success;
     }
 

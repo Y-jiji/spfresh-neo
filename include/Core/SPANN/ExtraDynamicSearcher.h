@@ -1077,7 +1077,9 @@ class ExtraDynamicSearcher {
 
         auto exSetUpEnd = std::chrono::high_resolution_clock::now();
 
-        p_stats->m_exSetUpLatency = ((double)std::chrono::duration_cast<std::chrono::microseconds>(exSetUpEnd - exStart).count()) / 1000;
+        if (p_stats) {
+            p_stats->m_exSetUpLatency = ((double)std::chrono::duration_cast<std::chrono::microseconds>(exSetUpEnd - exStart).count()) / 1000;
+        }
 
         COMMON::QueryResultSet<ValueType>& queryResults = *((COMMON::QueryResultSet<ValueType>*)&p_queryResults);
 
@@ -1090,7 +1092,7 @@ class ExtraDynamicSearcher {
 
         std::vector<std::string> postingLists;
 
-        std::chrono::microseconds remainLimit = m_hardLatencyLimit - std::chrono::microseconds((int)p_stats->m_totalLatency);
+        std::chrono::microseconds remainLimit = m_hardLatencyLimit - (p_stats ? std::chrono::microseconds((int)p_stats->m_totalLatency) : std::chrono::microseconds(0));
 
         auto readStart = std::chrono::high_resolution_clock::now();
         db->MultiGet(p_exWorkSpace->m_postingIDs, &postingLists, remainLimit);

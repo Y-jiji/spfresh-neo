@@ -37,8 +37,12 @@ class ResultWriter {
     ResultWriter& operator=(ResultWriter&&) = delete;
 
     // Lockless write methods - thread-safe, non-blocking (spins if buffer full)
-    void WriteWriteRecord(std::uint64_t p_seqNum, std::uint64_t p_internalId);
-    void WriteReadRecord(std::uint64_t p_seqNum, const std::uint64_t* p_resultIds);
+    // p_seqNum: the sequence number of the trace record (for a insert)
+    // p_internalId: the returned internal id by vector database
+    void WriteInsertRecord(std::uint64_t p_seqNum, std::uint64_t p_internalId);
+    // p_seqNum: the sequence number of the trace record (for a search)
+    // p_resultIds: the returned internl ids of query result (sorted by distance incr)
+    void WriteSearchRecord(std::uint64_t p_seqNum, const std::uint64_t* p_resultIds);
 
     // Flush all pending writes to disk
     void Flush();
@@ -231,7 +235,7 @@ inline void ResultWriter::WriteSlotToFile(std::size_t p_slotIdx) {
     }
 }
 
-inline void ResultWriter::WriteWriteRecord(std::uint64_t p_seqNum, std::uint64_t p_internalId) {
+inline void ResultWriter::WriteInsertRecord(std::uint64_t p_seqNum, std::uint64_t p_internalId) {
     std::size_t slotIdx = ClaimSlot();
     char* data = GetSlotData(slotIdx);
 
@@ -243,7 +247,7 @@ inline void ResultWriter::WriteWriteRecord(std::uint64_t p_seqNum, std::uint64_t
     MarkSlotReady(slotIdx, ResultRecordType::Write);
 }
 
-inline void ResultWriter::WriteReadRecord(std::uint64_t p_seqNum, const std::uint64_t* p_resultIds) {
+inline void ResultWriter::WriteSearchRecord(std::uint64_t p_seqNum, const std::uint64_t* p_resultIds) {
     std::size_t slotIdx = ClaimSlot();
     char* data = GetSlotData(slotIdx);
 

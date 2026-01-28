@@ -31,7 +31,7 @@ bool TestBasicWriteRead() {
         ResultWriter writer(testFile, k);
 
         for (std::size_t i = 0; i < numWriteRecords; ++i) {
-            writer.WriteWriteRecord(i, i * 1000);
+            writer.WriteInsertRecord(i, i * 1000);
         }
 
         std::vector<std::uint64_t> resultIds(k);
@@ -39,7 +39,7 @@ bool TestBasicWriteRead() {
             for (std::size_t j = 0; j < k; ++j) {
                 resultIds[j] = i * 100 + j;
             }
-            writer.WriteReadRecord(numWriteRecords + i, resultIds.data());
+            writer.WriteSearchRecord(numWriteRecords + i, resultIds.data());
         }
 
         writer.Close();
@@ -116,12 +116,12 @@ bool TestMultiThreadedWrites() {
 
                     // Alternate between write and read records
                     if (seqNum % 2 == 0) {
-                        writer.WriteWriteRecord(seqNum, seqNum * 10);
+                        writer.WriteInsertRecord(seqNum, seqNum * 10);
                     } else {
                         for (std::size_t j = 0; j < k; ++j) {
                             resultIds[j] = seqNum * 100 + j;
                         }
-                        writer.WriteReadRecord(seqNum, resultIds.data());
+                        writer.WriteSearchRecord(seqNum, resultIds.data());
                     }
                 }
             });
@@ -204,12 +204,12 @@ bool TestHighContention() {
                     std::size_t seqNum = counter.fetch_add(1, std::memory_order_relaxed);
 
                     if (seqNum % 3 == 0) {
-                        writer.WriteWriteRecord(seqNum, seqNum);
+                        writer.WriteInsertRecord(seqNum, seqNum);
                     } else {
                         for (std::size_t j = 0; j < k; ++j) {
                             resultIds[j] = seqNum + j;
                         }
-                        writer.WriteReadRecord(seqNum, resultIds.data());
+                        writer.WriteSearchRecord(seqNum, resultIds.data());
                     }
                 }
             });
@@ -274,7 +274,7 @@ bool TestLargeK() {
                     for (std::size_t j = 0; j < k; ++j) {
                         resultIds[j] = seqNum * 1000 + j;
                     }
-                    writer.WriteReadRecord(seqNum, resultIds.data());
+                    writer.WriteSearchRecord(seqNum, resultIds.data());
                 }
             });
         }
@@ -334,15 +334,15 @@ bool TestFlushBehavior() {
         ResultWriter writer(testFile, k);
 
         // Write some records
-        writer.WriteWriteRecord(0, 100);
-        writer.WriteWriteRecord(1, 200);
+        writer.WriteInsertRecord(0, 100);
+        writer.WriteInsertRecord(1, 200);
 
         // Flush
         writer.Flush();
 
         // Write more
         std::vector<std::uint64_t> resultIds(k, 42);
-        writer.WriteReadRecord(2, resultIds.data());
+        writer.WriteSearchRecord(2, resultIds.data());
 
         // Flush again
         writer.Flush();
@@ -402,7 +402,7 @@ bool TestRecordTypeDistribution() {
                     if (wc < numWriteRecords) {
                         std::size_t claimed = writeCounter.fetch_add(1, std::memory_order_relaxed);
                         if (claimed < numWriteRecords) {
-                            writer.WriteWriteRecord(claimed, claimed * 10);
+                            writer.WriteInsertRecord(claimed, claimed * 10);
                             continue;
                         }
                     }
@@ -414,7 +414,7 @@ bool TestRecordTypeDistribution() {
                             for (std::size_t j = 0; j < k; ++j) {
                                 resultIds[j] = claimed + j;
                             }
-                            writer.WriteReadRecord(claimed + 1000000, resultIds.data());
+                            writer.WriteSearchRecord(claimed + 1000000, resultIds.data());
                         }
                     }
                 }
@@ -480,7 +480,7 @@ bool TestConcurrentFlushAndWrite() {
                 while (true) {
                     std::size_t seqNum = counter.fetch_add(1, std::memory_order_relaxed);
                     if (seqNum >= numRecords) break;
-                    writer.WriteWriteRecord(seqNum, seqNum);
+                    writer.WriteInsertRecord(seqNum, seqNum);
                 }
             });
         }
