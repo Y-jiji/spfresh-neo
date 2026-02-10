@@ -32,6 +32,34 @@ struct Args {
     std::string queryOutput;
     std::string valueType = "Float";
     unsigned seed = 42;
+    // SPDK parameters
+    int spdkBatchSize = 256;
+    int spdkCapacity = 10000000;
+    // SelectHead parameters
+    std::string distCalcMethod = "L2";
+    double ratio = 0.1;
+    int treeNumber = 1;
+    int bktKmeansK = 32;
+    int bktLeafSize = 8;
+    int selectThreshold = 12;
+    int splitFactor = 9;
+    int splitThreshold = 18;
+    // BuildSSDIndex parameters
+    int internalResultNum = 64;
+    int replicaCount = 8;
+    int postingPageLimit = 3;
+    bool excludeHead = false;
+    bool searchDuringUpdate = true;
+    int insertThreadNum = 4;
+    int appendThreadNum = 2;
+    int reassignThreadNum = 0;
+    bool disableReassign = false;
+    int reassignK = 64;
+    int mergeThreshold = 10;
+    int bufferLength = 1;
+    int resultNum = 10;
+    int searchInternalResultNum = 64;
+    int maxDistRatio = 1000000;
 };
 
 static void PrintUsage(const char* prog) {
@@ -49,7 +77,35 @@ static void PrintUsage(const char* prog) {
               << "  --mapping-output <file> Output file for VID-to-SeqNum mapping (default: stdout)\n"
               << "  --query-output <file>   Output file for query results (default: stdout)\n"
               << "  --value-type <type>   Float, Int8, Int16, UInt8 (default: Float)\n"
-              << "  --seed <n>            Random seed (default: 42)\n";
+              << "  --seed <n>            Random seed (default: 42)\n"
+              << "  SPDK:\n"
+              << "  --spdk-batch-size <n> SPDK batch size (default: 256)\n"
+              << "  --spdk-capacity <n>   SPDK posting slot capacity (default: 10000000)\n"
+              << "  SelectHead:\n"
+              << "  --dist-calc-method <s> Distance method (default: L2)\n"
+              << "  --ratio <f>           Head selection ratio (default: 0.1)\n"
+              << "  --tree-number <n>     BKT tree count (default: 1)\n"
+              << "  --bkt-kmeans-k <n>    BKT k-means K (default: 32)\n"
+              << "  --bkt-leaf-size <n>   BKT leaf size (default: 8)\n"
+              << "  --select-threshold <n> Head select threshold (default: 12)\n"
+              << "  --split-factor <n>    Split factor (default: 9)\n"
+              << "  --split-threshold <n> Split threshold (default: 18)\n"
+              << "  BuildSSDIndex:\n"
+              << "  --internal-result-num <n> Internal result count (default: 64)\n"
+              << "  --replica-count <n>   Replica count (default: 8)\n"
+              << "  --posting-page-limit <n> Posting page limit (default: 3)\n"
+              << "  --exclude-head        Exclude head vectors from postings (default: false)\n"
+              << "  --no-search-during-update Disable search during update (default: enabled)\n"
+              << "  --insert-threads <n>  Frontend insert threads (default: 4)\n"
+              << "  --append-threads <n>  Background append threads (default: 2)\n"
+              << "  --reassign-threads <n> Background reassign threads (default: 0)\n"
+              << "  --disable-reassign    Disable reassignment (default: false)\n"
+              << "  --reassign-k <n>      Reassign K (default: 64)\n"
+              << "  --merge-threshold <n> Merge threshold (default: 10)\n"
+              << "  --buffer-length <n>   Buffer length (default: 1)\n"
+              << "  --result-num <n>      Search result count (default: 10)\n"
+              << "  --search-internal-result-num <n> Search internal result count (default: 64)\n"
+              << "  --max-dist-ratio <n>  Max distance ratio (default: 1000000)\n";
 }
 
 static bool ParseArgs(int argc, char* argv[], Args& args) {
@@ -83,6 +139,56 @@ static bool ParseArgs(int argc, char* argv[], Args& args) {
             args.valueType = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
             args.seed = static_cast<unsigned>(std::stoul(argv[++i]));
+        } else if (arg == "--spdk-batch-size" && i + 1 < argc) {
+            args.spdkBatchSize = std::stoi(argv[++i]);
+        } else if (arg == "--spdk-capacity" && i + 1 < argc) {
+            args.spdkCapacity = std::stoi(argv[++i]);
+        } else if (arg == "--dist-calc-method" && i + 1 < argc) {
+            args.distCalcMethod = argv[++i];
+        } else if (arg == "--ratio" && i + 1 < argc) {
+            args.ratio = std::stod(argv[++i]);
+        } else if (arg == "--tree-number" && i + 1 < argc) {
+            args.treeNumber = std::stoi(argv[++i]);
+        } else if (arg == "--bkt-kmeans-k" && i + 1 < argc) {
+            args.bktKmeansK = std::stoi(argv[++i]);
+        } else if (arg == "--bkt-leaf-size" && i + 1 < argc) {
+            args.bktLeafSize = std::stoi(argv[++i]);
+        } else if (arg == "--select-threshold" && i + 1 < argc) {
+            args.selectThreshold = std::stoi(argv[++i]);
+        } else if (arg == "--split-factor" && i + 1 < argc) {
+            args.splitFactor = std::stoi(argv[++i]);
+        } else if (arg == "--split-threshold" && i + 1 < argc) {
+            args.splitThreshold = std::stoi(argv[++i]);
+        } else if (arg == "--internal-result-num" && i + 1 < argc) {
+            args.internalResultNum = std::stoi(argv[++i]);
+        } else if (arg == "--replica-count" && i + 1 < argc) {
+            args.replicaCount = std::stoi(argv[++i]);
+        } else if (arg == "--posting-page-limit" && i + 1 < argc) {
+            args.postingPageLimit = std::stoi(argv[++i]);
+        } else if (arg == "--exclude-head") {
+            args.excludeHead = true;
+        } else if (arg == "--no-search-during-update") {
+            args.searchDuringUpdate = false;
+        } else if (arg == "--insert-threads" && i + 1 < argc) {
+            args.insertThreadNum = std::stoi(argv[++i]);
+        } else if (arg == "--append-threads" && i + 1 < argc) {
+            args.appendThreadNum = std::stoi(argv[++i]);
+        } else if (arg == "--reassign-threads" && i + 1 < argc) {
+            args.reassignThreadNum = std::stoi(argv[++i]);
+        } else if (arg == "--disable-reassign") {
+            args.disableReassign = true;
+        } else if (arg == "--reassign-k" && i + 1 < argc) {
+            args.reassignK = std::stoi(argv[++i]);
+        } else if (arg == "--merge-threshold" && i + 1 < argc) {
+            args.mergeThreshold = std::stoi(argv[++i]);
+        } else if (arg == "--buffer-length" && i + 1 < argc) {
+            args.bufferLength = std::stoi(argv[++i]);
+        } else if (arg == "--result-num" && i + 1 < argc) {
+            args.resultNum = std::stoi(argv[++i]);
+        } else if (arg == "--search-internal-result-num" && i + 1 < argc) {
+            args.searchInternalResultNum = std::stoi(argv[++i]);
+        } else if (arg == "--max-dist-ratio" && i + 1 < argc) {
+            args.maxDistRatio = std::stoi(argv[++i]);
         } else if (arg == "--help" || arg == "-h") {
             PrintUsage(argv[0]);
             std::exit(0);
@@ -227,30 +333,46 @@ static int Run(const Args& args) {
     index->SetParameter("Dim", std::to_string(dim).c_str(), "Base");
     index->SetParameter("VectorPath", tempVectorFile.c_str(), "Base");
     index->SetParameter("IndexDirectory", args.indexDir.c_str(), "Base");
-    index->SetParameter("DistCalcMethod", "L2", "Base");
+    index->SetParameter("DistCalcMethod", args.distCalcMethod.c_str(), "Base");
 
     index->SetParameter("isExecute", "true", "SelectHead");
     index->SetParameter("SelectHeadType", "BKT", "SelectHead");
     index->SetParameter("NumberOfThreads", std::to_string(numThreads).c_str(), "SelectHead");
-    index->SetParameter("Ratio", "0.1", "SelectHead");
-    index->SetParameter("TreeNumber", "1", "SelectHead");
-    index->SetParameter("BKTKmeansK", "8", "SelectHead");
-    index->SetParameter("BKTLeafSize", "4", "SelectHead");
+    index->SetParameter("Ratio", std::to_string(args.ratio).c_str(), "SelectHead");
+    index->SetParameter("TreeNumber", std::to_string(args.treeNumber).c_str(), "SelectHead");
+    index->SetParameter("BKTKmeansK", std::to_string(args.bktKmeansK).c_str(), "SelectHead");
+    index->SetParameter("BKTLeafSize", std::to_string(args.bktLeafSize).c_str(), "SelectHead");
+    index->SetParameter("SelectThreshold", std::to_string(args.selectThreshold).c_str(), "SelectHead");
+    index->SetParameter("SplitFactor", std::to_string(args.splitFactor).c_str(), "SelectHead");
+    index->SetParameter("SplitThreshold", std::to_string(args.splitThreshold).c_str(), "SelectHead");
 
     index->SetParameter("isExecute", "true", "BuildHead");
 
     index->SetParameter("isExecute", "true", "BuildSSDIndex");
     index->SetParameter("BuildSsdIndex", "true", "BuildSSDIndex");
     index->SetParameter("NumberOfThreads", std::to_string(numThreads).c_str(), "BuildSSDIndex");
-    index->SetParameter("ExcludeHead", "true", "BuildSSDIndex");
-    index->SetParameter("UseDirectIO", "false", "BuildSSDIndex");
+    index->SetParameter("InternalResultNum", std::to_string(args.internalResultNum).c_str(), "BuildSSDIndex");
+    index->SetParameter("ReplicaCount", std::to_string(args.replicaCount).c_str(), "BuildSSDIndex");
+    index->SetParameter("PostingPageLimit", std::to_string(args.postingPageLimit).c_str(), "BuildSSDIndex");
+    index->SetParameter("ExcludeHead", args.excludeHead ? "true" : "false", "BuildSSDIndex");
     index->SetParameter("SpdkMappingPath", args.spdkMap.c_str(), "BuildSSDIndex");
-    index->SetParameter("PostingPageLimit", "1", "BuildSSDIndex");
-    index->SetParameter("SpdkCapacity", "10000", "BuildSSDIndex");
+    index->SetParameter("SpdkBatchSize", std::to_string(args.spdkBatchSize).c_str(), "BuildSSDIndex");
+    index->SetParameter("SpdkCapacity", std::to_string(args.spdkCapacity).c_str(), "BuildSSDIndex");
 
     index->SetParameter("Update", "true", "BuildSSDIndex");
-    index->SetParameter("AppendThreadNum", "1", "BuildSSDIndex");
-    index->SetParameter("ReassignThreadNum", "1", "BuildSSDIndex");
+    index->SetParameter("SearchDuringUpdate", args.searchDuringUpdate ? "true" : "false", "BuildSSDIndex");
+    index->SetParameter("InsertThreadNum", std::to_string(args.insertThreadNum).c_str(), "BuildSSDIndex");
+    index->SetParameter("AppendThreadNum", std::to_string(args.appendThreadNum).c_str(), "BuildSSDIndex");
+    index->SetParameter("ReassignThreadNum", std::to_string(args.reassignThreadNum).c_str(), "BuildSSDIndex");
+    index->SetParameter("DisableReassign", args.disableReassign ? "true" : "false", "BuildSSDIndex");
+    index->SetParameter("ReassignK", std::to_string(args.reassignK).c_str(), "BuildSSDIndex");
+    index->SetParameter("MergeThreshold", std::to_string(args.mergeThreshold).c_str(), "BuildSSDIndex");
+    index->SetParameter("BufferLength", std::to_string(args.bufferLength).c_str(), "BuildSSDIndex");
+
+    index->SetParameter("ResultNum", std::to_string(args.resultNum).c_str(), "BuildSSDIndex");
+    index->SetParameter("SearchInternalResultNum", std::to_string(args.searchInternalResultNum).c_str(), "BuildSSDIndex");
+    index->SetParameter("SearchPostingPageLimit", std::to_string(args.postingPageLimit).c_str(), "BuildSSDIndex");
+    index->SetParameter("MaxDistRatio", std::to_string(args.maxDistRatio).c_str(), "BuildSSDIndex");
 
     // --- Build index from first batch ---
     std::cerr << "Building index with batch 1 (" << count << " vectors)...\n";

@@ -29,4 +29,27 @@ gdb -ex=run --args "$BUILD_DIR/experiment" \
     --index-dir "$INDEX_DIR" \
     --spdk-map "$INDEX_DIR/spdk_mapping.bin" \
     --mapping-output "$INDEX_DIR/mapping.txt" \
-    --query-output "$INDEX_DIR/results.txt"
+    --query-output "$INDEX_DIR/results.txt" \
+    --value-type Float \
+    --spdk-batch-size 256 \
+    --spdk-capacity 10000000 \
+    --dist-calc-method L2 \
+    --ratio 0.1 \
+    --tree-number 1 \
+    --bkt-kmeans-k 32 \
+    --bkt-leaf-size 8 \
+    --select-threshold 12 \
+    --split-factor 9 \
+    --split-threshold 18 \
+    --internal-result-num 64 \
+    --replica-count 8 \
+    --posting-page-limit 3 \
+    --insert-threads 4 \
+    --append-threads 2 \
+    --reassign-threads 0 \
+    --reassign-k 64 \
+    --merge-threshold 10 \
+    --buffer-length 1 \
+    --result-num 10 \
+    --search-internal-result-num 64 \
+    --max-dist-ratio 1000000
