@@ -24,7 +24,7 @@ struct Args {
     std::string dbVectors;
     std::string queryVectors;
     int queryCount = 0;
-    int k = 10;
+    std::vector<int> kValues = {10};
     int threads = 4;
     std::string indexDir = "./experiment_index";
     std::string spdkMap;
@@ -70,7 +70,7 @@ static void PrintUsage(const char* prog) {
               << "  --db-vectors <file>    Database vector file (raw binary, no header)\n"
               << "  --query-vectors <file> Query vector file (raw binary, no header)\n"
               << "  --query-count <n>      Number of query vectors (random generation only)\n"
-              << "  --k <n>               Number of nearest neighbors (default: 10)\n"
+              << "  --k <n>[,<n>...]      Comma-separated K values (default: 10)\n"
               << "  --threads <n>         Number of worker threads (default: 4)\n"
               << "  --index-dir <dir>     Index directory (default: ./experiment_index)\n"
               << "  --spdk-map <file>     SPDK mapping file path (required)\n"
@@ -124,7 +124,15 @@ static bool ParseArgs(int argc, char* argv[], Args& args) {
         } else if (arg == "--query-count" && i + 1 < argc) {
             args.queryCount = std::stoi(argv[++i]);
         } else if (arg == "--k" && i + 1 < argc) {
-            args.k = std::stoi(argv[++i]);
+            args.kValues.clear();
+            std::string kstr = argv[++i];
+            size_t pos = 0;
+            while (pos < kstr.size()) {
+                size_t comma = kstr.find(',', pos);
+                if (comma == std::string::npos) comma = kstr.size();
+                args.kValues.push_back(std::stoi(kstr.substr(pos, comma - pos)));
+                pos = comma + 1;
+            }
         } else if (arg == "--threads" && i + 1 < argc) {
             args.threads = std::stoi(argv[++i]);
         } else if (arg == "--index-dir" && i + 1 < argc) {
@@ -286,7 +294,8 @@ static int Run(const Args& args) {
     const int count = args.count;
     const int numBatches = args.batches;
     const int totalVectors = count * numBatches;
-    const int k = args.k;
+    const std::vector<int>& kValues = args.kValues;
+    const int maxK = *std::max_element(kValues.begin(), kValues.end());
     const int numThreads = args.threads;
 
     // --- Load or generate all database vectors ---
@@ -395,6 +404,7 @@ static int Run(const Args& args) {
     struct QueryResult_ {
         int queryIdx;
         std::vector<QueryHit> hits;
+        double latencyUs; // per-query latency in microseconds
     };
 
     auto runQueries = [&](std::vector<QueryResult_>& results) {
@@ -411,10 +421,14 @@ static int Run(const Args& args) {
                     if (qi >= queryCount) break;
 
                     COMMON::QueryResultSet<T> query(
-                        queryVectors.data() + static_cast<size_t>(qi) * dim, k);
+                        queryVectors.data() + static_cast<size_t>(qi) * dim, maxK);
                     query.Reset();
 
+                    auto t0 = std::chrono::high_resolution_clock::now();
                     ErrorCode err = index->SearchIndex(query);
+                    auto t1 = std::chrono::high_resolution_clock::now();
+                    double latUs = std::chrono::duration<double, std::micro>(t1 - t0).count();
+
                     if (err != ErrorCode::Success) {
                         std::cerr << "Error: SearchIndex failed for query " << qi
                                   << " with code " << static_cast<int>(err) << "\n";
@@ -423,7 +437,8 @@ static int Run(const Args& args) {
 
                     QueryResult_ qr;
                     qr.queryIdx = qi;
-                    for (int j = 0; j < k; j++) {
+                    qr.latencyUs = latUs;
+                    for (int j = 0; j < maxK; j++) {
                         BasicResult* r = query.GetResult(j);
                         if (r && r->VID >= 0) {
                             qr.hits.push_back({r->VID, r->Dist});
@@ -447,12 +462,49 @@ static int Run(const Args& args) {
                   [](const QueryResult_& a, const QueryResult_& b) { return a.queryIdx < b.queryIdx; });
     };
 
-    auto writeQueryResults = [&](FILE* qout, const char* label, const std::vector<QueryResult_>& results) {
-        fprintf(qout, "# %s (queryCount=%d, k=%d)\n", label, queryCount, k);
+    auto computePercentile = [](std::vector<double>& sorted, double pct) -> double {
+        if (sorted.empty()) return 0.0;
+        double idx = pct / 100.0 * (sorted.size() - 1);
+        size_t lo = static_cast<size_t>(idx);
+        size_t hi = lo + 1;
+        if (hi >= sorted.size()) return sorted.back();
+        double frac = idx - lo;
+        return sorted[lo] * (1.0 - frac) + sorted[hi] * frac;
+    };
+
+    auto writeLatencyStats = [&](FILE* qout, const char* label,
+                                 const std::vector<QueryResult_>& results,
+                                 double totalTimeSec) {
+        std::vector<double> latencies;
+        latencies.reserve(results.size());
+        for (auto& qr : results)
+            latencies.push_back(qr.latencyUs);
+        std::sort(latencies.begin(), latencies.end());
+
+        double mean = 0;
+        for (double l : latencies) mean += l;
+        if (!latencies.empty()) mean /= latencies.size();
+
+        double p95 = computePercentile(latencies, 95.0);
+        double p99 = computePercentile(latencies, 99.0);
+        double p999 = computePercentile(latencies, 99.9);
+        double qps = totalTimeSec > 0 ? results.size() / totalTimeSec : 0;
+
+        fprintf(qout, "# %s\n", label);
+        fprintf(qout, "# Latency (us): mean=%.2f  P95=%.2f  P99=%.2f  P99.9=%.2f\n",
+                mean, p95, p99, p999);
+        fprintf(qout, "# QPS=%.2f  total_queries=%zu  wall_time=%.6fs\n",
+                qps, results.size(), totalTimeSec);
+    };
+
+    auto writeQueryResults = [&](FILE* qout, const char* label, int kVal,
+                                 const std::vector<QueryResult_>& results) {
+        fprintf(qout, "# %s (queryCount=%d, k=%d)\n", label, queryCount, kVal);
         for (auto& qr : results) {
             fprintf(qout, "Query %d:", qr.queryIdx);
-            for (auto& h : qr.hits) {
-                fprintf(qout, " [VID=%d Dist=%.6f]", h.vid, h.dist);
+            int limit = std::min(kVal, static_cast<int>(qr.hits.size()));
+            for (int j = 0; j < limit; j++) {
+                fprintf(qout, " [VID=%d Dist=%.6f]", qr.hits[j].vid, qr.hits[j].dist);
             }
             fprintf(qout, "\n");
         }
@@ -473,10 +525,21 @@ static int Run(const Args& args) {
     if (queryCount > 0) {
         std::cerr << "Querying after initial build...\n";
         std::vector<QueryResult_> results;
+        auto wallStart = std::chrono::high_resolution_clock::now();
         runQueries(results);
-        char label[64];
+        auto wallEnd = std::chrono::high_resolution_clock::now();
+        double wallSec = std::chrono::duration<double>(wallEnd - wallStart).count();
+
+        char label[128];
         snprintf(label, sizeof(label), "After batch 1/%d (%d total vectors)", numBatches, count);
-        writeQueryResults(qout, label, results);
+        for (int kVal : kValues) {
+            char klabel[160];
+            snprintf(klabel, sizeof(klabel), "%s, k=%d", label, kVal);
+            writeLatencyStats(qout, klabel, results, wallSec);
+        }
+        for (int kVal : kValues) {
+            writeQueryResults(qout, label, kVal, results);
+        }
         std::cerr << "Batch 1 queries complete.\n";
     }
 
@@ -530,10 +593,21 @@ static int Run(const Args& args) {
         if (queryCount > 0) {
             std::cerr << "Querying after batch " << (b + 1) << "...\n";
             std::vector<QueryResult_> results;
+            auto wallStart = std::chrono::high_resolution_clock::now();
             runQueries(results);
-            char label[64];
+            auto wallEnd = std::chrono::high_resolution_clock::now();
+            double wallSec = std::chrono::duration<double>(wallEnd - wallStart).count();
+
+            char label[128];
             snprintf(label, sizeof(label), "After batch %d/%d (%d total vectors)", b + 1, numBatches, batchEnd);
-            writeQueryResults(qout, label, results);
+            for (int kVal : kValues) {
+                char klabel[160];
+                snprintf(klabel, sizeof(klabel), "%s, k=%d", label, kVal);
+                writeLatencyStats(qout, klabel, results, wallSec);
+            }
+            for (int kVal : kValues) {
+                writeQueryResults(qout, label, kVal, results);
+            }
             std::cerr << "Batch " << (b + 1) << " queries complete.\n";
         }
     }

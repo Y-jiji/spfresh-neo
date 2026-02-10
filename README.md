@@ -39,6 +39,81 @@ Hugepages must be configured before running (see `script/setup-hugepages.sh`).
 - **tape** — Trace-driven workload replay
 - **experiment** — Batch vector add experiment with per-batch query evaluation
 
+## Experiment Output Format
+
+The `experiment` binary produces two output files (or stdout) controlled by `--query-output` and `--mapping-output`.
+
+### Query results (`--query-output`)
+
+`--k` accepts a comma-separated list of K values (e.g., `--k 1,10`). Queries are executed once with the largest K; results are truncated for each requested K value.
+
+For each batch, the output contains latency statistics for each K value, followed by per-query results for each K value:
+
+```
+# After batch 1/5 (2000 total vectors), k=1
+# Latency (us): mean=123.45  P95=234.56  P99=345.67  P99.9=456.78
+# QPS=8123.45  total_queries=100  wall_time=0.012308s
+# After batch 1/5 (2000 total vectors), k=10
+# Latency (us): mean=123.45  P95=234.56  P99=345.67  P99.9=456.78
+# QPS=8123.45  total_queries=100  wall_time=0.012308s
+# After batch 1/5 (2000 total vectors) (queryCount=100, k=1)
+Query 0: [VID=42 Dist=0.123456]
+Query 1: [VID=13 Dist=0.111111]
+...
+
+# After batch 1/5 (2000 total vectors) (queryCount=100, k=10)
+Query 0: [VID=42 Dist=0.123456] [VID=7 Dist=0.234567] ...
+Query 1: [VID=13 Dist=0.111111] [VID=55 Dist=0.222222] ...
+...
+```
+
+- **Latency**: Per-query latency measured around the `SearchIndex` call; mean, P95, P99, P99.9 in microseconds
+- **QPS**: Queries per second based on wall-clock time of the full query batch (includes thread parallelism)
+- **VID**: Internal vector ID assigned by the index (not the input sequence number)
+- **Dist**: L2 distance (or whichever `--dist-calc-method` is configured)
+- Results are sorted by distance (nearest first), truncated to the respective K
+- Sections appear after the initial build and after each subsequent batch add
+
+### VID-to-SeqNum mapping (`--mapping-output`)
+
+Maps input sequence numbers to internal VIDs for vectors added via `AddIndexSPFresh` (batches 2+). Vectors from batch 1 (initial build) are not included since their VID equals their sequence number within the batch.
+
+```
+# VID-to-SeqNum Mapping (count=2000, batches=5)
+# Index VID
+2000 1847
+2001 1848
+2002 1849
+...
+```
+
+- Column 1: Input sequence number (0-based index into the full vector array)
+- Column 2: Internal VID assigned by the index
+- Rows are sorted by sequence number
+
+### stderr progress
+
+Progress and diagnostics are printed to stderr:
+
+```
+Generating 10000 random vectors (dim=128, 5 batches of 2000)...
+Writing batch 1 vectors to ./experiment_index/init_vectors.bin...
+Creating SPANN index...
+Building index with batch 1 (2000 vectors)...
+Index built: 2000 vectors, dim=128
+Querying after initial build...
+Batch 1 queries complete.
+Batch 2/5: adding 2000 vectors (index 2000..3999) with 4 threads...
+Waiting for batch 2 background operations...
+Batch 2 complete.
+Querying after batch 2...
+Batch 2 queries complete.
+...
+All 5 batches complete. Total vectors: 10000
+Waiting for background operations to finish...
+Done.
+```
+
 ## Disclaimer
 
 This codebase is refactored from [SPFresh/SPFresh](https://github.com/SPFresh/SPFresh). The following structural changes have been made. **None of these changes alter the core indexing, search, split, merge, or reassign algorithms.**

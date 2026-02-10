@@ -24,7 +24,7 @@ gdb -ex=run --args "$BUILD_DIR/experiment" \
     --count 2000 \
     --batches 5 \
     --query-count 5 \
-    --k 5 \
+    --k 1,10 \
     --threads 2 \
     --index-dir "$INDEX_DIR" \
     --spdk-map "$INDEX_DIR/spdk_mapping.bin" \
