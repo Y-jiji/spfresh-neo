@@ -77,10 +77,15 @@ SPTAG::Helper::VectorSetReader<T>::LoadFile(const std::string& p_filePaths) {
 template <typename T>
 std::shared_ptr<SPTAG::VectorSet>
 SPTAG::Helper::VectorSetReader<T>::GetVectorSet(SPTAG::SizeType start, SPTAG::SizeType end) const {
-    if (start > m_size)
-        start = m_size;
-    if (end < 0 || end > m_size)
-        end = m_size;
+    SizeType effectiveSize = m_size;
+    if (effectiveSize == 0 && m_fileSize > 0 && m_dim > 0) {
+        effectiveSize = static_cast<SizeType>(m_fileSize / (sizeof(T) * m_dim));
+    }
+
+    if (start > effectiveSize)
+        start = effectiveSize;
+    if (end < 0 || end > effectiveSize)
+        end = effectiveSize;
 
     std::uint64_t offset = ((std::uint64_t)sizeof(T)) * start * m_dim;
     std::uint64_t totalBytes = ((std::uint64_t)sizeof(T)) * (end - start) * m_dim;

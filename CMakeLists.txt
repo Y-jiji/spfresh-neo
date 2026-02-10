@@ -57,6 +57,13 @@ target_include_directories(tape PRIVATE
     $<INSTALL_INTERFACE:include>
 )
 
+add_executable(experiment bin/experiment.cpp)
+target_link_libraries(experiment PRIVATE Boost::headers SPTAGLib)
+target_include_directories(experiment PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
 add_executable(BKTSerializationTest unittest/BKTSerializationTest.cpp)
 target_link_libraries(BKTSerializationTest PRIVATE SPTAGLib)
 target_include_directories(BKTSerializationTest PRIVATE

@@ -650,7 +650,7 @@ class ExtraDynamicSearcher {
                 exit(0);
             }
 
-            auto* postingP = reinterpret_cast<uint8_t*>(&currentPostingList.front());
+            auto* postingP = currentPostingList.empty() ? nullptr : reinterpret_cast<uint8_t*>(&currentPostingList.front());
             size_t postVectorNum = currentPostingList.size() / m_vectorInfoSize;
             int currentLength = 0;
             uint8_t* vectorId = postingP;
@@ -698,7 +698,7 @@ class ExtraDynamicSearcher {
                             exit(0);
                         }
 
-                        postingP = reinterpret_cast<uint8_t*>(&nextPostingList.front());
+                        postingP = nextPostingList.empty() ? nullptr : reinterpret_cast<uint8_t*>(&nextPostingList.front());
                         postVectorNum = nextPostingList.size() / m_vectorInfoSize;
                         nextLength = 0;
                         vectorId = postingP;
@@ -742,7 +742,7 @@ class ExtraDynamicSearcher {
                         /* ReAssign */
                         if (currentLength > nextLength) {
                             /* ReAssign queryResult->VID*/
-                            postingP = reinterpret_cast<uint8_t*>(&nextPostingList.front());
+                            postingP = nextPostingList.empty() ? nullptr : reinterpret_cast<uint8_t*>(&nextPostingList.front());
                             for (int j = 0; j < nextLength; j++) {
                                 uint8_t* vectorId = postingP + j * m_vectorInfoSize;
                                 // SizeType vid = *(reinterpret_cast<SizeType*>(vectorId));
@@ -754,7 +754,7 @@ class ExtraDynamicSearcher {
                             }
                         } else {
                             /* ReAssign headID*/
-                            postingP = reinterpret_cast<uint8_t*>(&currentPostingList.front());
+                            postingP = currentPostingList.empty() ? nullptr : reinterpret_cast<uint8_t*>(&currentPostingList.front());
                             for (int j = 0; j < currentLength; j++) {
                                 uint8_t* vectorId = postingP + j * m_vectorInfoSize;
                                 // SizeType vid = *(reinterpret_cast<SizeType*>(vectorId));
