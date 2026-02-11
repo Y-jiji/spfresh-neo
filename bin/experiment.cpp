@@ -12,10 +12,69 @@
 #include <thread>
 #include <vector>
 
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "Core/Common/QueryResultSet.h"
 #include "Core/SPANN/Index.h"
 
 using namespace SPTAG;
+
+struct MmapFile {
+    void* addr = MAP_FAILED;
+    size_t len = 0;
+    int fd = -1;
+
+    bool open(const std::string& path, size_t minBytes) {
+        fd = ::open(path.c_str(), O_RDONLY);
+        if (fd < 0) {
+            std::cerr << "Error: cannot open file for mmap: " << path << "\n";
+            return false;
+        }
+        struct stat st;
+        if (fstat(fd, &st) != 0) {
+            std::cerr << "Error: fstat failed: " << path << "\n";
+            ::close(fd); fd = -1;
+            return false;
+        }
+        len = static_cast<size_t>(st.st_size);
+        if (len < minBytes) {
+            std::cerr << "Error: file " << path << " too small: need " << minBytes
+                      << " bytes, got " << len << "\n";
+            ::close(fd); fd = -1;
+            return false;
+        }
+        addr = mmap(nullptr, len, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (addr == MAP_FAILED) {
+            std::cerr << "Error: mmap failed: " << path << "\n";
+            ::close(fd); fd = -1;
+            return false;
+        }
+        return true;
+    }
+
+    void close() {
+        if (addr != MAP_FAILED) {
+            munmap(addr, len);
+            addr = MAP_FAILED;
+            len = 0;
+        }
+        if (fd >= 0) {
+            ::close(fd);
+            fd = -1;
+        }
+    }
+
+    ~MmapFile() { close(); }
+
+    MmapFile() = default;
+    MmapFile(const MmapFile&) = delete;
+    MmapFile& operator=(const MmapFile&) = delete;
+
+    template<typename U> const U* as() const { return static_cast<const U*>(addr); }
+};
 
 struct Args {
     int dim = 0;
@@ -223,69 +282,32 @@ static bool ParseArgs(int argc, char* argv[], Args& args) {
 }
 
 template <typename T>
-static void GenerateRandomVectors(std::vector<T>& data, int count, int dim, unsigned seed) {
-    std::mt19937 rng(seed);
-    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
-    data.resize(static_cast<size_t>(count) * dim);
-    for (size_t i = 0; i < data.size(); i++) {
-        data[i] = static_cast<T>(dist(rng));
-    }
-}
-
-template <typename T>
-static bool LoadVectorsFromFile(const std::string& path, std::vector<T>& data, int expectedCount, int dim) {
-    std::ifstream in(path, std::ios::binary | std::ios::ate);
-    if (!in.is_open()) {
-        std::cerr << "Error: cannot open file: " << path << "\n";
-        return false;
-    }
-    auto fileSize = in.tellg();
-    in.seekg(0);
-
-    size_t needed = static_cast<size_t>(expectedCount) * dim * sizeof(T);
-    if (static_cast<size_t>(fileSize) < needed) {
-        std::cerr << "Error: file " << path << " too small: need " << needed
-                  << " bytes, got " << fileSize << "\n";
-        return false;
-    }
-
-    data.resize(static_cast<size_t>(expectedCount) * dim);
-    in.read(reinterpret_cast<char*>(data.data()), needed);
-    return true;
-}
-
-template <typename T>
-static bool LoadQueryVectorsFromFile(const std::string& path, std::vector<T>& data, int dim, int& queryCount) {
-    std::ifstream in(path, std::ios::binary | std::ios::ate);
-    if (!in.is_open()) {
-        std::cerr << "Error: cannot open file: " << path << "\n";
-        return false;
-    }
-    auto fileSize = static_cast<size_t>(in.tellg());
-    in.seekg(0);
-
-    size_t elemSize = static_cast<size_t>(dim) * sizeof(T);
-    if (fileSize % elemSize != 0) {
-        std::cerr << "Error: query file size (" << fileSize
-                  << ") not divisible by vector size (" << elemSize << ")\n";
-        return false;
-    }
-
-    queryCount = static_cast<int>(fileSize / elemSize);
-    data.resize(static_cast<size_t>(queryCount) * dim);
-    in.read(reinterpret_cast<char*>(data.data()), fileSize);
-    return true;
-}
-
-template <typename T>
-static bool SaveVectorsToBinaryFile(const T* data, int count, int dim, const std::string& path) {
+static bool GenerateRandomVectorsToFile(const std::string& path, int count, int dim, unsigned seed) {
     std::ofstream out(path, std::ios::binary);
     if (!out.is_open()) {
         std::cerr << "Error: cannot write to file: " << path << "\n";
         return false;
     }
-    out.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(count) * dim * sizeof(T));
-    return out.good();
+    std::mt19937 rng(seed);
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    const int chunkVecs = 10000;
+    std::vector<T> buf(static_cast<size_t>(chunkVecs) * dim);
+    int remaining = count;
+    while (remaining > 0) {
+        int n = std::min(remaining, chunkVecs);
+        size_t elems = static_cast<size_t>(n) * dim;
+        for (size_t i = 0; i < elems; i++) {
+            buf[i] = static_cast<T>(dist(rng));
+        }
+        out.write(reinterpret_cast<const char*>(buf.data()),
+                  static_cast<std::streamsize>(elems) * sizeof(T));
+        if (!out.good()) {
+            std::cerr << "Error: write failed: " << path << "\n";
+            return false;
+        }
+        remaining -= n;
+    }
+    return true;
 }
 
 template <typename T>
@@ -298,31 +320,52 @@ static int Run(const Args& args) {
     const int maxK = *std::max_element(kValues.begin(), kValues.end());
     const int numThreads = args.threads;
 
-    // --- Load or generate all database vectors ---
-    std::vector<T> allVectors;
+    // --- mmap database vectors file, or prepare for random generation ---
+    MmapFile dbMmap;
+    bool useDbFile = !args.dbVectors.empty();
 
-    if (!args.dbVectors.empty()) {
-        std::cerr << "Loading " << totalVectors << " database vectors from " << args.dbVectors << "...\n";
-        if (!LoadVectorsFromFile<T>(args.dbVectors, allVectors, totalVectors, dim))
+    if (useDbFile) {
+        size_t needed = static_cast<size_t>(totalVectors) * dim * sizeof(T);
+        std::cerr << "Memory-mapping " << totalVectors << " database vectors from " << args.dbVectors << "...\n";
+        if (!dbMmap.open(args.dbVectors, needed))
             return 1;
-    } else {
-        std::cerr << "Generating " << totalVectors << " random vectors (dim=" << dim
-                  << ", " << numBatches << " batches of " << count << ")...\n";
-        GenerateRandomVectors<T>(allVectors, totalVectors, dim, args.seed);
     }
 
-    // --- Load or generate query vectors ---
-    std::vector<T> queryVectors;
+    // --- mmap or generate query vectors ---
+    MmapFile queryMmap;
+    std::vector<T> queryVectorsOwned;
+    const T* queryData = nullptr;
     int queryCount = args.queryCount;
 
     if (!args.queryVectors.empty()) {
-        std::cerr << "Loading query vectors from " << args.queryVectors << "...\n";
-        if (!LoadQueryVectorsFromFile<T>(args.queryVectors, queryVectors, dim, queryCount))
+        std::cerr << "Memory-mapping query vectors from " << args.queryVectors << "...\n";
+        // Determine query count from file size
+        struct stat qst;
+        if (stat(args.queryVectors.c_str(), &qst) != 0) {
+            std::cerr << "Error: cannot stat query file: " << args.queryVectors << "\n";
             return 1;
-        std::cerr << "Loaded " << queryCount << " query vectors.\n";
+        }
+        size_t qFileSize = static_cast<size_t>(qst.st_size);
+        size_t elemSize = static_cast<size_t>(dim) * sizeof(T);
+        if (qFileSize % elemSize != 0) {
+            std::cerr << "Error: query file size (" << qFileSize
+                      << ") not divisible by vector size (" << elemSize << ")\n";
+            return 1;
+        }
+        queryCount = static_cast<int>(qFileSize / elemSize);
+        if (!queryMmap.open(args.queryVectors, qFileSize))
+            return 1;
+        queryData = queryMmap.as<T>();
+        std::cerr << "Mapped " << queryCount << " query vectors.\n";
     } else if (queryCount > 0) {
         std::cerr << "Generating " << queryCount << " random query vectors...\n";
-        GenerateRandomVectors<T>(queryVectors, queryCount, dim, args.seed + 2);
+        std::mt19937 rng(args.seed + 2);
+        std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+        queryVectorsOwned.resize(static_cast<size_t>(queryCount) * dim);
+        for (size_t i = 0; i < queryVectorsOwned.size(); i++) {
+            queryVectorsOwned[i] = static_cast<T>(dist(rng));
+        }
+        queryData = queryVectorsOwned.data();
     }
 
     // --- Prepare index directory ---
@@ -331,8 +374,22 @@ static int Run(const Args& args) {
     // --- Write first batch to temp file for BuildIndex ---
     std::string tempVectorFile = args.indexDir + "/init_vectors.bin";
     std::cerr << "Writing batch 1 vectors to " << tempVectorFile << "...\n";
-    if (!SaveVectorsToBinaryFile<T>(allVectors.data(), count, dim, tempVectorFile))
-        return 1;
+    if (useDbFile) {
+        std::ofstream out(tempVectorFile, std::ios::binary);
+        if (!out.is_open()) {
+            std::cerr << "Error: cannot write to file: " << tempVectorFile << "\n";
+            return 1;
+        }
+        size_t bytes = static_cast<size_t>(count) * dim * sizeof(T);
+        out.write(reinterpret_cast<const char*>(dbMmap.as<T>()), static_cast<std::streamsize>(bytes));
+        if (!out.good()) {
+            std::cerr << "Error: write failed: " << tempVectorFile << "\n";
+            return 1;
+        }
+    } else {
+        if (!GenerateRandomVectorsToFile<T>(tempVectorFile, count, dim, args.seed))
+            return 1;
+    }
 
     // --- Create and configure SPANN index ---
     std::cerr << "Creating SPANN index...\n";
@@ -421,7 +478,7 @@ static int Run(const Args& args) {
                     if (qi >= queryCount) break;
 
                     COMMON::QueryResultSet<T> query(
-                        queryVectors.data() + static_cast<size_t>(qi) * dim, maxK);
+                        queryData + static_cast<size_t>(qi) * dim, maxK);
                     query.Reset();
 
                     auto t0 = std::chrono::high_resolution_clock::now();
@@ -558,17 +615,29 @@ static int Run(const Args& args) {
         std::vector<std::thread> addThreads;
 
         for (int t = 0; t < numThreads; t++) {
-            addThreads.emplace_back([&, t, batchEnd]() {
+            addThreads.emplace_back([&, t, batchStart, batchEnd]() {
                 index->Initialize();
 
                 while (true) {
                     int i = nextIdx.fetch_add(1);
                     if (i >= batchEnd) break;
 
+                    const T* vecPtr;
+                    std::vector<T> vecBuf;
+                    if (useDbFile) {
+                        vecPtr = dbMmap.as<T>() + static_cast<size_t>(i) * dim;
+                    } else {
+                        vecBuf.resize(dim);
+                        std::mt19937 rng(args.seed + static_cast<unsigned>(i));
+                        std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+                        for (int d = 0; d < dim; d++)
+                            vecBuf[d] = static_cast<T>(dist(rng));
+                        vecPtr = vecBuf.data();
+                    }
+
                     SizeType vid;
                     ErrorCode err = index->AddIndexSPFresh(
-                        allVectors.data() + static_cast<size_t>(i) * dim,
-                        1, dim, &vid);
+                        vecPtr, 1, dim, &vid);
                     if (err != ErrorCode::Success) {
                         std::cerr << "Error: AddIndexSPFresh failed for vector " << i
                                   << " with code " << static_cast<int>(err) << "\n";
