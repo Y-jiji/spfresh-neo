@@ -477,6 +477,7 @@ static int Run(const Args& args) {
     index->SetParameter("SplitThreshold", std::to_string(args.splitThreshold).c_str(), "SelectHead");
 
     index->SetParameter("isExecute", "true", "BuildHead");
+    index->SetParameter("NumberOfThreads", std::to_string(numThreads).c_str(), "BuildHead");
 
     index->SetParameter("isExecute", "true", "BuildSSDIndex");
     index->SetParameter("BuildSsdIndex", "true", "BuildSSDIndex");
