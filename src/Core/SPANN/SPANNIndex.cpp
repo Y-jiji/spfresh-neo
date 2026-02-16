@@ -263,7 +263,7 @@ ErrorCode Index<T>::SaveIndexData(const std::vector<std::shared_ptr<Helper::Disk
 #pragma region K-NN search
 
 template <typename T>
-ErrorCode Index<T>::SearchIndex(QueryResult& p_query, bool p_searchDeleted) const {
+ErrorCode Index<T>::SearchIndex(QueryResult& p_query, bool p_searchDeleted, SearchStats* p_stats) const {
     if (!m_bReady)
         return ErrorCode::EmptyIndex;
 
@@ -307,7 +307,7 @@ ErrorCode Index<T>::SearchIndex(QueryResult& p_query, bool p_searchDeleted) cons
 
         if (m_vectorTranslateMap.get() != nullptr)
             p_queryResults->Reverse();
-        m_extraSearcher->SearchIndex(m_workspace.get(), *p_queryResults, m_index, nullptr, nullptr, nullptr);
+        m_extraSearcher->SearchIndex(m_workspace.get(), *p_queryResults, m_index, p_stats, nullptr, nullptr);
         p_queryResults->SortResult();
     }
 

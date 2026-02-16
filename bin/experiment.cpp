@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -21,6 +22,21 @@
 #include "Core/SPANN/Index.h"
 
 using namespace SPTAG;
+
+static long get_rss_mb() {
+    FILE* f = fopen("/proc/self/status", "r");
+    if (!f) return -1;
+    long rss_kb = -1;
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "VmRSS:", 6) == 0) {
+            sscanf(line + 6, "%ld", &rss_kb);
+            break;
+        }
+    }
+    fclose(f);
+    return rss_kb > 0 ? rss_kb / 1024 : -1;
+}
 
 struct MmapFile {
     void* addr = MAP_FAILED;
@@ -79,7 +95,7 @@ struct MmapFile {
 struct Args {
     int dim = 0;
     int count = 0;
-    int batches = 1;
+    int batches = -1;
     std::string dbVectors;
     std::string queryVectors;
     int queryCount = 0;
@@ -87,8 +103,8 @@ struct Args {
     int threads = 4;
     std::string indexDir = "./experiment_index";
     std::string spdkMap;
-    std::string mappingOutput;
     std::string queryOutput;
+    std::string statsOutput;
     std::string valueType = "Float";
     unsigned seed = 42;
     // SPDK parameters
@@ -117,15 +133,15 @@ struct Args {
     int mergeThreshold = 10;
     int bufferLength = 1;
     int resultNum = 10;
-    int searchInternalResultNum = 64;
+    std::vector<int> searchInternalResultNums; // per-K; expanded to match kValues
     int maxDistRatio = 1000000;
 };
 
 static void PrintUsage(const char* prog) {
     std::cerr << "Usage: " << prog << " [options]\n"
               << "  --dim <n>              Vector dimension (required)\n"
-              << "  --count <n>            Vectors per batch (required unless --db-vectors)\n"
-              << "  --batches <n>          Number of batches (default: 1; first builds index, rest add)\n"
+              << "  --count <n>            Vectors per batch (required)\n"
+              << "  --batches <n>          Number of batches (auto-computed from --db-vectors if omitted)\n"
               << "  --db-vectors <file>    Database vector file (raw binary, no header)\n"
               << "  --query-vectors <file> Query vector file (raw binary, no header)\n"
               << "  --query-count <n>      Number of query vectors (random generation only)\n"
@@ -133,8 +149,8 @@ static void PrintUsage(const char* prog) {
               << "  --threads <n>         Number of worker threads (default: 4)\n"
               << "  --index-dir <dir>     Index directory (default: ./experiment_index)\n"
               << "  --spdk-map <file>     SPDK mapping file path (required)\n"
-              << "  --mapping-output <file> Output file for VID-to-SeqNum mapping (default: stdout)\n"
-              << "  --query-output <file>   Output file for query results (default: stdout)\n"
+              << "  --query-output <prefix> Output prefix for per-K query results (files: <prefix>_K<k>.txt)\n"
+              << "  --stats-output <file>   TSV file for per-batch throughput/latency stats\n"
               << "  --value-type <type>   Float, Int8, Int16, UInt8 (default: Float)\n"
               << "  --seed <n>            Random seed (default: 42)\n"
               << "  SPDK:\n"
@@ -163,7 +179,7 @@ static void PrintUsage(const char* prog) {
               << "  --merge-threshold <n> Merge threshold (default: 10)\n"
               << "  --buffer-length <n>   Buffer length (default: 1)\n"
               << "  --result-num <n>      Search result count (default: 10)\n"
-              << "  --search-internal-result-num <n> Search internal result count (default: 64)\n"
+              << "  --search-internal-result-num <n>[,<n>,...] Search internal result count per K (default: 64)\n"
               << "  --max-dist-ratio <n>  Max distance ratio (default: 1000000)\n";
 }
 
@@ -198,10 +214,10 @@ static bool ParseArgs(int argc, char* argv[], Args& args) {
             args.indexDir = argv[++i];
         } else if (arg == "--spdk-map" && i + 1 < argc) {
             args.spdkMap = argv[++i];
-        } else if (arg == "--mapping-output" && i + 1 < argc) {
-            args.mappingOutput = argv[++i];
         } else if (arg == "--query-output" && i + 1 < argc) {
             args.queryOutput = argv[++i];
+        } else if (arg == "--stats-output" && i + 1 < argc) {
+            args.statsOutput = argv[++i];
         } else if (arg == "--value-type" && i + 1 < argc) {
             args.valueType = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
@@ -253,7 +269,15 @@ static bool ParseArgs(int argc, char* argv[], Args& args) {
         } else if (arg == "--result-num" && i + 1 < argc) {
             args.resultNum = std::stoi(argv[++i]);
         } else if (arg == "--search-internal-result-num" && i + 1 < argc) {
-            args.searchInternalResultNum = std::stoi(argv[++i]);
+            args.searchInternalResultNums.clear();
+            std::string sstr = argv[++i];
+            size_t pos = 0;
+            while (pos < sstr.size()) {
+                size_t comma = sstr.find(',', pos);
+                if (comma == std::string::npos) comma = sstr.size();
+                args.searchInternalResultNums.push_back(std::stoi(sstr.substr(pos, comma - pos)));
+                pos = comma + 1;
+            }
         } else if (arg == "--max-dist-ratio" && i + 1 < argc) {
             args.maxDistRatio = std::stoi(argv[++i]);
         } else if (arg == "--help" || arg == "-h") {
@@ -274,10 +298,26 @@ static bool ParseArgs(int argc, char* argv[], Args& args) {
         std::cerr << "Error: --spdk-map is required\n";
         return false;
     }
-    if (args.count <= 0 && args.dbVectors.empty()) {
-        std::cerr << "Error: --count is required when not using --db-vectors\n";
+    if (args.count <= 0) {
+        std::cerr << "Error: --count is required and must be > 0\n";
         return false;
     }
+    if (args.batches < 0 && args.dbVectors.empty()) {
+        std::cerr << "Error: --batches is required when not using --db-vectors\n";
+        return false;
+    }
+
+    // Expand searchInternalResultNums to match kValues
+    if (args.searchInternalResultNums.empty()) {
+        args.searchInternalResultNums.assign(args.kValues.size(), 64);
+    } else if (args.searchInternalResultNums.size() == 1) {
+        args.searchInternalResultNums.assign(args.kValues.size(), args.searchInternalResultNums[0]);
+    } else if (args.searchInternalResultNums.size() != args.kValues.size()) {
+        std::cerr << "Error: --search-internal-result-num count (" << args.searchInternalResultNums.size()
+                  << ") must match --k count (" << args.kValues.size() << ")\n";
+        return false;
+    }
+
     return true;
 }
 
@@ -314,21 +354,45 @@ template <typename T>
 static int Run(const Args& args) {
     const int dim = args.dim;
     const int count = args.count;
-    const int numBatches = args.batches;
-    const int totalVectors = count * numBatches;
     const std::vector<int>& kValues = args.kValues;
-    const int maxK = *std::max_element(kValues.begin(), kValues.end());
+    const std::vector<int>& searchInternalResultNums = args.searchInternalResultNums;
     const int numThreads = args.threads;
 
     // --- mmap database vectors file, or prepare for random generation ---
     MmapFile dbMmap;
     bool useDbFile = !args.dbVectors.empty();
 
+    // Determine numBatches and totalVectors
+    int numBatches;
+    int totalVectors;
+
     if (useDbFile) {
+        struct stat dbst;
+        if (stat(args.dbVectors.c_str(), &dbst) != 0) {
+            std::cerr << "Error: cannot stat db file: " << args.dbVectors << "\n";
+            return 1;
+        }
+        size_t dbFileSize = static_cast<size_t>(dbst.st_size);
+        size_t vectorBytes = static_cast<size_t>(dim) * sizeof(T);
+        int fileVectors = static_cast<int>(dbFileSize / vectorBytes);
+
+        if (args.batches > 0) {
+            numBatches = args.batches;
+            totalVectors = count * numBatches;
+        } else {
+            numBatches = (fileVectors + count - 1) / count;
+            totalVectors = fileVectors;
+            std::cerr << "Auto-computed: " << fileVectors << " vectors in file -> "
+                      << numBatches << " batches of " << count << "\n";
+        }
+
         size_t needed = static_cast<size_t>(totalVectors) * dim * sizeof(T);
         std::cerr << "Memory-mapping " << totalVectors << " database vectors from " << args.dbVectors << "...\n";
         if (!dbMmap.open(args.dbVectors, needed))
             return 1;
+    } else {
+        numBatches = args.batches;
+        totalVectors = count * numBatches;
     }
 
     // --- mmap or generate query vectors ---
@@ -436,18 +500,28 @@ static int Run(const Args& args) {
     index->SetParameter("BufferLength", std::to_string(args.bufferLength).c_str(), "BuildSSDIndex");
 
     index->SetParameter("ResultNum", std::to_string(args.resultNum).c_str(), "BuildSSDIndex");
-    index->SetParameter("SearchInternalResultNum", std::to_string(args.searchInternalResultNum).c_str(), "BuildSSDIndex");
+    int maxSearchInternalResultNum = *std::max_element(args.searchInternalResultNums.begin(), args.searchInternalResultNums.end());
+    index->SetParameter("SearchInternalResultNum", std::to_string(maxSearchInternalResultNum).c_str(), "BuildSSDIndex");
     index->SetParameter("SearchPostingPageLimit", std::to_string(args.postingPageLimit).c_str(), "BuildSSDIndex");
     index->SetParameter("MaxDistRatio", std::to_string(args.maxDistRatio).c_str(), "BuildSSDIndex");
 
     // --- Build index from first batch ---
     std::cerr << "Building index with batch 1 (" << count << " vectors)...\n";
+    auto buildStart = std::chrono::high_resolution_clock::now();
     ErrorCode ret = index->BuildIndex(false);
+    auto buildEnd = std::chrono::high_resolution_clock::now();
+    double buildMs = std::chrono::duration<double, std::milli>(buildEnd - buildStart).count();
     if (ret != ErrorCode::Success) {
         std::cerr << "Error: BuildIndex failed with code " << static_cast<int>(ret) << "\n";
         return 1;
     }
-    std::cerr << "Index built: " << index->GetNumSamples() << " vectors, dim=" << index->GetFeatureDim() << "\n";
+    std::cerr << "Index built: " << index->GetNumSamples() << " vectors, dim=" << index->GetFeatureDim()
+              << " (" << buildMs << " ms)\n";
+
+    // VID-to-SeqNum mapping: BuildIndex assigns VID = seqNum for the initial batch
+    // Use a flat vector indexed by VID (VIDs are dense integers starting from 0)
+    std::vector<int> vidToSeqNum(count);
+    for (int i = 0; i < count; i++) vidToSeqNum[i] = i;
 
     // --- Helpers ---
     struct VIDMapping {
@@ -462,15 +536,19 @@ static int Run(const Args& args) {
         int queryIdx;
         std::vector<QueryHit> hits;
         double latencyUs; // per-query latency in microseconds
+        int distCmps;     // number of distance computations (posting list phase)
     };
 
-    auto runQueries = [&](std::vector<QueryResult_>& results) {
+    auto runQueries = [&](std::vector<QueryResult_>& results, int kVal, int searchInternal) {
+        // Set per-K search parameter
+        index->SetParameter("SearchInternalResultNum", std::to_string(searchInternal).c_str(), "BuildSSDIndex");
+
         std::vector<std::vector<QueryResult_>> threadResults(numThreads);
         std::atomic<int> nextQuery(0);
         std::vector<std::thread> queryThreads;
 
         for (int t = 0; t < numThreads; t++) {
-            queryThreads.emplace_back([&, t]() {
+            queryThreads.emplace_back([&, t, kVal]() {
                 index->Initialize();
 
                 while (true) {
@@ -478,11 +556,12 @@ static int Run(const Args& args) {
                     if (qi >= queryCount) break;
 
                     COMMON::QueryResultSet<T> query(
-                        queryData + static_cast<size_t>(qi) * dim, maxK);
+                        queryData + static_cast<size_t>(qi) * dim, kVal);
                     query.Reset();
 
+                    SPANN::SearchStats stats;
                     auto t0 = std::chrono::high_resolution_clock::now();
-                    ErrorCode err = index->SearchIndex(query);
+                    ErrorCode err = index->SearchIndex(query, false, &stats);
                     auto t1 = std::chrono::high_resolution_clock::now();
                     double latUs = std::chrono::duration<double, std::micro>(t1 - t0).count();
 
@@ -495,7 +574,8 @@ static int Run(const Args& args) {
                     QueryResult_ qr;
                     qr.queryIdx = qi;
                     qr.latencyUs = latUs;
-                    for (int j = 0; j < maxK; j++) {
+                    qr.distCmps = stats.m_totalListElementsCount;
+                    for (int j = 0; j < kVal; j++) {
                         BasicResult* r = query.GetResult(j);
                         if (r && r->VID >= 0) {
                             qr.hits.push_back({r->VID, r->Dist});
@@ -519,6 +599,15 @@ static int Run(const Args& args) {
                   [](const QueryResult_& a, const QueryResult_& b) { return a.queryIdx < b.queryIdx; });
     };
 
+    struct LatencyStats {
+        double qps;
+        double meanUs;
+        double p95Us;
+        double p99Us;
+        double p999Us;
+        double meanDistCmps;
+    };
+
     auto computePercentile = [](std::vector<double>& sorted, double pct) -> double {
         if (sorted.empty()) return 0.0;
         double idx = pct / 100.0 * (sorted.size() - 1);
@@ -529,75 +618,129 @@ static int Run(const Args& args) {
         return sorted[lo] * (1.0 - frac) + sorted[hi] * frac;
     };
 
-    auto writeLatencyStats = [&](FILE* qout, const char* label,
-                                 const std::vector<QueryResult_>& results,
-                                 double totalTimeSec) {
+    auto computeLatencyStats = [&](const std::vector<QueryResult_>& results,
+                                    double wallSec) -> LatencyStats {
+        LatencyStats stats{};
         std::vector<double> latencies;
         latencies.reserve(results.size());
         for (auto& qr : results)
             latencies.push_back(qr.latencyUs);
         std::sort(latencies.begin(), latencies.end());
 
-        double mean = 0;
-        for (double l : latencies) mean += l;
-        if (!latencies.empty()) mean /= latencies.size();
+        double sum = 0;
+        for (double l : latencies) sum += l;
+        stats.meanUs = latencies.empty() ? 0 : sum / latencies.size();
+        stats.p95Us = computePercentile(latencies, 95.0);
+        stats.p99Us = computePercentile(latencies, 99.0);
+        stats.p999Us = computePercentile(latencies, 99.9);
+        stats.qps = wallSec > 0 ? results.size() / wallSec : 0;
 
-        double p95 = computePercentile(latencies, 95.0);
-        double p99 = computePercentile(latencies, 99.0);
-        double p999 = computePercentile(latencies, 99.9);
-        double qps = totalTimeSec > 0 ? results.size() / totalTimeSec : 0;
+        double cmpsSum = 0;
+        for (auto& qr : results) cmpsSum += qr.distCmps;
+        stats.meanDistCmps = results.empty() ? 0 : cmpsSum / results.size();
 
-        fprintf(qout, "# %s\n", label);
-        fprintf(qout, "# Latency (us): mean=%.2f  P95=%.2f  P99=%.2f  P99.9=%.2f\n",
-                mean, p95, p99, p999);
-        fprintf(qout, "# QPS=%.2f  total_queries=%zu  wall_time=%.6fs\n",
-                qps, results.size(), totalTimeSec);
+        return stats;
     };
 
-    auto writeQueryResults = [&](FILE* qout, const char* label, int kVal,
+    auto writeQueryResults = [&](FILE* f, int batchIdx, int batchOffset, int kVal,
                                  const std::vector<QueryResult_>& results) {
-        fprintf(qout, "# %s (queryCount=%d, k=%d)\n", label, queryCount, kVal);
+        fprintf(f, "# after batch %d (offset %d)\n", batchIdx, batchOffset);
         for (auto& qr : results) {
-            fprintf(qout, "Query %d:", qr.queryIdx);
+            fprintf(f, "query %d:", qr.queryIdx);
             int limit = std::min(kVal, static_cast<int>(qr.hits.size()));
             for (int j = 0; j < limit; j++) {
-                fprintf(qout, " [VID=%d Dist=%.6f]", qr.hits[j].vid, qr.hits[j].dist);
+                    fprintf(f, " (%d: id=%d, dist=%g)", j, vidToSeqNum[qr.hits[j].vid], qr.hits[j].dist);
             }
-            fprintf(qout, "\n");
+            fprintf(f, "\n");
         }
-        fprintf(qout, "\n");
     };
 
-    // --- Open query output file ---
-    FILE* qout = stdout;
-    if (!args.queryOutput.empty()) {
-        qout = fopen(args.queryOutput.c_str(), "w");
-        if (!qout) {
-            std::cerr << "Error: cannot open query output file: " << args.queryOutput << "\n";
+    auto printSearchSummary = [&](int /*batch*/, const LatencyStats& stats, int kVal) {
+        fprintf(stderr, "  K=%-4d  QPS=%10.1f  mean=%8.1fus  P95=%8.1fus  P99=%8.1fus  P99.9=%8.1fus\n",
+                kVal, stats.qps, stats.meanUs, stats.p95Us, stats.p99Us, stats.p999Us);
+    };
+
+    // --- Open stats output file ---
+    FILE* statsFile = nullptr;
+    if (!args.statsOutput.empty()) {
+        statsFile = fopen(args.statsOutput.c_str(), "w");
+        if (!statsFile) {
+            std::cerr << "Error: cannot open stats output file: " << args.statsOutput << "\n";
             return 1;
+        }
+        fprintf(statsFile, "batch\tphase\tK\tnum_points\tpoints_inserted\t"
+                "insert_throughput_pts_sec\tinsert_time_ms\tmerge_time_ms\tbatch_total_ms\t"
+                "search_qps\tmean_lat_ms\tp95_lat_ms\tp99_lat_ms\tp999_lat_ms\trss_mb\tmean_dist_cmps\tmean_hops\n");
+    }
+
+    // Print stats header to stdout
+    printf("batch\tphase\tK\tnum_points\tpoints_inserted\t"
+           "insert_throughput_pts_sec\tinsert_time_ms\tmerge_time_ms\tbatch_total_ms\t"
+           "search_qps\tmean_lat_ms\tp95_lat_ms\tp99_lat_ms\tp999_lat_ms\trss_mb\tmean_dist_cmps\tmean_hops\n");
+    fflush(stdout);
+
+    // --- Open per-K query result files ---
+    std::vector<std::pair<int, FILE*>> queryFiles;
+    if (!args.queryOutput.empty()) {
+        for (int kVal : kValues) {
+            std::string path = args.queryOutput + "_K" + std::to_string(kVal) + ".txt";
+            FILE* f = fopen(path.c_str(), "w");
+            if (!f) {
+                std::cerr << "Error: cannot open query output file: " << path << "\n";
+                return 1;
+            }
+            queryFiles.push_back({kVal, f});
+        }
+    }
+
+    auto getQueryFile = [&](int kVal) -> FILE* {
+        for (auto& p : queryFiles)
+            if (p.first == kVal) return p.second;
+        return nullptr;
+    };
+
+    // --- Write build stats row ---
+    {
+        long rss = get_rss_mb();
+        const char* fmt = "%d\tbuild\t\t%d\t%d\t\t\t\t%.2f\t\t\t\t\t\t%.2f\t\t\n";
+        printf(fmt, 0, count, count, buildMs, (double)rss);
+        fflush(stdout);
+        if (statsFile) {
+            fprintf(statsFile, fmt, 0, count, count, buildMs, (double)rss);
+            fflush(statsFile);
         }
     }
 
     // --- Query after initial build (before any adds) ---
     if (queryCount > 0) {
-        std::cerr << "Querying after initial build...\n";
-        std::vector<QueryResult_> results;
-        auto wallStart = std::chrono::high_resolution_clock::now();
-        runQueries(results);
-        auto wallEnd = std::chrono::high_resolution_clock::now();
-        double wallSec = std::chrono::duration<double>(wallEnd - wallStart).count();
+        fprintf(stderr, "--- Batch 0/%d search results (%d points) ---\n", numBatches, count);
+        for (size_t ki = 0; ki < kValues.size(); ki++) {
+            int kVal = kValues[ki];
+            std::vector<QueryResult_> results;
+            auto wallStart = std::chrono::high_resolution_clock::now();
+            runQueries(results, kVal, searchInternalResultNums[ki]);
+            auto wallEnd = std::chrono::high_resolution_clock::now();
+            double wallSec = std::chrono::duration<double>(wallEnd - wallStart).count();
 
-        char label[128];
-        snprintf(label, sizeof(label), "After batch 1/%d (%d total vectors)", numBatches, count);
-        for (int kVal : kValues) {
-            char klabel[160];
-            snprintf(klabel, sizeof(klabel), "%s, k=%d", label, kVal);
-            writeLatencyStats(qout, klabel, results, wallSec);
+            LatencyStats stats = computeLatencyStats(results, wallSec);
+            printSearchSummary(0, stats, kVal);
+
+            {
+                const char* fmt = "%d\tsearch\t%d\t\t\t\t\t\t\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t\t%.1f\t\n";
+                double meanMs = stats.meanUs / 1000.0, p95Ms = stats.p95Us / 1000.0,
+                       p99Ms = stats.p99Us / 1000.0, p999Ms = stats.p999Us / 1000.0;
+                printf(fmt, 0, kVal, stats.qps, meanMs, p95Ms, p99Ms, p999Ms, stats.meanDistCmps);
+                fflush(stdout);
+                if (statsFile) {
+                    fprintf(statsFile, fmt, 0, kVal, stats.qps, meanMs, p95Ms, p99Ms, p999Ms, stats.meanDistCmps);
+                    fflush(statsFile);
+                }
+            }
+
+            FILE* qf = getQueryFile(kVal);
+            if (qf) writeQueryResults(qf, 0, 0, kVal, results);
         }
-        for (int kVal : kValues) {
-            writeQueryResults(qout, label, kVal, results);
-        }
-        std::cerr << "Batch 1 queries complete.\n";
+        std::cerr << "Batch 0 queries complete.\n";
     }
 
     // --- Add remaining batches with queries after each ---
@@ -605,11 +748,15 @@ static int Run(const Args& args) {
 
     for (int b = 1; b < numBatches; b++) {
         int batchStart = b * count;
-        int batchEnd = batchStart + count;
+        int batchEnd = std::min(batchStart + count, totalVectors);
+        int batchCount = batchEnd - batchStart;
 
         std::cerr << "Batch " << (b + 1) << "/" << numBatches
-                  << ": adding " << count << " vectors (index " << batchStart
+                  << ": adding " << batchCount << " vectors (index " << batchStart
                   << ".." << (batchEnd - 1) << ") with " << numThreads << " threads...\n";
+
+        auto batchTotalStart = std::chrono::high_resolution_clock::now();
+        auto insertStart = std::chrono::high_resolution_clock::now();
 
         std::atomic<int> nextIdx(batchStart);
         std::vector<std::thread> addThreads;
@@ -651,31 +798,77 @@ static int Run(const Args& args) {
         }
 
         for (auto& th : addThreads) th.join();
+        auto insertEnd = std::chrono::high_resolution_clock::now();
+        double insertMs = std::chrono::duration<double, std::milli>(insertEnd - insertStart).count();
+
+        // Update VID-to-SeqNum mapping with newly inserted vectors (not timed)
+        if (static_cast<size_t>(batchEnd) > vidToSeqNum.size())
+            vidToSeqNum.resize(batchEnd);
+        for (int t = 0; t < numThreads; t++) {
+            for (auto& m : threadMappings[t]) {
+                if (m.vid >= 0 && static_cast<size_t>(m.vid) < vidToSeqNum.size())
+                    vidToSeqNum[m.vid] = m.seqNum;
+            }
+            threadMappings[t].clear();
+        }
+        double insertThroughputPts = (insertMs > 0) ? batchCount / (insertMs / 1000.0) : 0;
 
         std::cerr << "Waiting for batch " << (b + 1) << " background operations...\n";
+        auto waitStart = std::chrono::high_resolution_clock::now();
         while (!index->AllFinished()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
-        std::cerr << "Batch " << (b + 1) << " complete.\n";
+        auto waitEnd = std::chrono::high_resolution_clock::now();
+        double waitMs = std::chrono::duration<double, std::milli>(waitEnd - waitStart).count();
+        auto batchTotalEnd = std::chrono::high_resolution_clock::now();
+        double batchTotalMs = std::chrono::duration<double, std::milli>(batchTotalEnd - batchTotalStart).count();
+
+        std::cerr << "Batch " << b << " complete: insert=" << insertMs
+                  << "ms, wait=" << waitMs << "ms, total=" << batchTotalMs << "ms"
+                  << ", throughput=" << insertThroughputPts << " pts/s\n";
+
+        // Write insert stats row
+        {
+            long rss = get_rss_mb();
+            const char* fmt = "%d\tinsert\t\t%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t\t\t\t\t\t%.2f\t\t\n";
+            printf(fmt, b, batchCount, batchEnd,
+                   insertThroughputPts, insertMs, waitMs, batchTotalMs, (double)rss);
+            fflush(stdout);
+            if (statsFile) {
+                fprintf(statsFile, fmt, b, batchCount, batchEnd,
+                        insertThroughputPts, insertMs, waitMs, batchTotalMs, (double)rss);
+                fflush(statsFile);
+            }
+        }
 
         // Query after this batch
         if (queryCount > 0) {
-            std::cerr << "Querying after batch " << (b + 1) << "...\n";
-            std::vector<QueryResult_> results;
-            auto wallStart = std::chrono::high_resolution_clock::now();
-            runQueries(results);
-            auto wallEnd = std::chrono::high_resolution_clock::now();
-            double wallSec = std::chrono::duration<double>(wallEnd - wallStart).count();
+            fprintf(stderr, "--- Batch %d/%d search results (%d points) ---\n", b, numBatches, batchEnd);
+            for (size_t ki = 0; ki < kValues.size(); ki++) {
+                int kVal = kValues[ki];
+                std::vector<QueryResult_> results;
+                auto wallStart = std::chrono::high_resolution_clock::now();
+                runQueries(results, kVal, searchInternalResultNums[ki]);
+                auto wallEnd = std::chrono::high_resolution_clock::now();
+                double wallSec = std::chrono::duration<double>(wallEnd - wallStart).count();
 
-            char label[128];
-            snprintf(label, sizeof(label), "After batch %d/%d (%d total vectors)", b + 1, numBatches, batchEnd);
-            for (int kVal : kValues) {
-                char klabel[160];
-                snprintf(klabel, sizeof(klabel), "%s, k=%d", label, kVal);
-                writeLatencyStats(qout, klabel, results, wallSec);
-            }
-            for (int kVal : kValues) {
-                writeQueryResults(qout, label, kVal, results);
+                LatencyStats stats = computeLatencyStats(results, wallSec);
+                printSearchSummary(b, stats, kVal);
+
+                {
+                    const char* fmt = "%d\tsearch\t%d\t\t\t\t\t\t\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t\t%.1f\t\n";
+                    double meanMs = stats.meanUs / 1000.0, p95Ms = stats.p95Us / 1000.0,
+                           p99Ms = stats.p99Us / 1000.0, p999Ms = stats.p999Us / 1000.0;
+                    printf(fmt, b, kVal, stats.qps, meanMs, p95Ms, p99Ms, p999Ms, stats.meanDistCmps);
+                    fflush(stdout);
+                    if (statsFile) {
+                        fprintf(statsFile, fmt, b, kVal, stats.qps, meanMs, p95Ms, p99Ms, p999Ms, stats.meanDistCmps);
+                        fflush(statsFile);
+                    }
+                }
+
+                FILE* qf = getQueryFile(kVal);
+                if (qf) writeQueryResults(qf, b, batchStart, kVal, results);
             }
             std::cerr << "Batch " << (b + 1) << " queries complete.\n";
         }
@@ -684,33 +877,9 @@ static int Run(const Args& args) {
         std::cerr << "All " << numBatches << " batches complete. Total vectors: " << totalVectors << "\n";
     }
 
-    if (qout != stdout) fclose(qout);
-
-    // --- Collect and sort VID mappings ---
-    std::vector<VIDMapping> allMappings;
-    for (auto& tm : threadMappings) {
-        allMappings.insert(allMappings.end(), tm.begin(), tm.end());
-    }
-    std::sort(allMappings.begin(), allMappings.end(),
-              [](const VIDMapping& a, const VIDMapping& b) { return a.seqNum < b.seqNum; });
-
-    // --- Output VID-to-SeqNum mapping ---
-    {
-        FILE* mout = stdout;
-        if (!args.mappingOutput.empty()) {
-            mout = fopen(args.mappingOutput.c_str(), "w");
-            if (!mout) {
-                std::cerr << "Error: cannot open mapping output file: " << args.mappingOutput << "\n";
-                return 1;
-            }
-        }
-        fprintf(mout, "# VID-to-SeqNum Mapping (count=%d, batches=%d)\n", count, numBatches);
-        fprintf(mout, "# Index VID\n");
-        for (auto& m : allMappings) {
-            fprintf(mout, "%d %d\n", m.seqNum, m.vid);
-        }
-        if (mout != stdout) fclose(mout);
-    }
+    // Close output files
+    if (statsFile) fclose(statsFile);
+    for (auto& p : queryFiles) fclose(p.second);
 
     // Wait for all background merge/reassign operations before index destruction
     std::cerr << "Waiting for background operations to finish...\n";

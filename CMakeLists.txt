@@ -13,6 +13,13 @@ set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 pkg_check_modules(SPDK REQUIRED IMPORTED_TARGET spdk_nvme spdk_env_dpdk spdk_bdev spdk_event spdk_bdev_uring spdk_bdev_nvme spdk_event_bdev spdk_event_accel spdk_event_sock spdk_event_iobuf)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 
+find_library(ISAL isal PATHS /usr/local/lib REQUIRED)
+find_library(ISALC isal_crypto PATHS /usr/local/lib REQUIRED)
+
+set_property(TARGET PkgConfig::SPDK APPEND PROPERTY
+    INTERFACE_LINK_LIBRARIES ${ISAL} ${ISALC}
+)
+
 file(GLOB UTIL_HDR_FILES include/Utils/*.h)
 file(GLOB UTIL_FILES src/Utils/*.cpp)
 add_library(DistanceUtils STATIC ${UTIL_FILES})
@@ -33,7 +40,7 @@ target_link_libraries(SPTAGLib PUBLIC
     DistanceUtils tbb
     PkgConfig::SPDK
     PkgConfig::ZSTD
-    uring isal isal_crypto numa OpenMP::OpenMP_CXX
+    uring ssl crypto numa OpenMP::OpenMP_CXX
 )
 
 add_executable(spfresh bin/spfresh.cpp)
