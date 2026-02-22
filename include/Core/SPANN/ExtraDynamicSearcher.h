@@ -156,7 +156,7 @@ class ExtraDynamicSearcher {
         m_postingSizeLimit = postingBlockLimit * PageSize / (sizeof(ValueType) * dim + sizeof(int) + sizeof(uint8_t));
         m_metaDataSize = sizeof(int) + sizeof(uint8_t);
         m_vectorInfoSize = dim * sizeof(ValueType) + m_metaDataSize;
-        m_hardLatencyLimit = std::chrono::microseconds((int)searchLatencyHardLimit * 1000);
+        m_hardLatencyLimit = std::chrono::microseconds::max();
         m_mergeThreshold = mergeThreshold;
         LOG(Helper::LogLevel::LL_Info, "Posting size limit: %d, search limit: %f, merge threshold: %d\n", m_postingSizeLimit, searchLatencyHardLimit, m_mergeThreshold);
     }
@@ -970,11 +970,22 @@ class ExtraDynamicSearcher {
             if (!p_index->ContainSample(headID)) {
                 goto checkDeleted;
             }
+            if (m_postingSizes.GetSize(headID) + appendNum > m_postingSizeLimit + m_mergeThreshold) {
+                static std::atomic<int> overflowLogCount{0};
+                if ((overflowLogCount.fetch_add(1) & 0x3FF) == 0) {
+                    LOG(Helper::LogLevel::LL_Warning, "Posting %d would overflow (%d + %d > %d + %d), splitting before merge (logged %d total)\n",
+                        headID, m_postingSizes.GetSize(headID), appendNum, m_postingSizeLimit, m_mergeThreshold, overflowLogCount.load());
+                }
+                lock.unlock();
+                Split(p_index, headID, !m_opt->m_disableReassign);
+                goto checkDeleted;
+            }
             auto appendIOBegin = std::chrono::high_resolution_clock::now();
-            if (db->Merge(headID, appendPosting) != ErrorCode::Success) {
-                LOG(Helper::LogLevel::LL_Error, "Merge failed! Posting Size:%d, limit: %d\n", m_postingSizes.GetSize(headID), m_postingSizeLimit);
+            ErrorCode mergeRet = db->Merge(headID, appendPosting);
+            if (mergeRet != ErrorCode::Success) {
+                LOG(Helper::LogLevel::LL_Error, "Merge failed for %d! Posting Size:%d, limit: %d\n", headID, m_postingSizes.GetSize(headID), m_postingSizeLimit);
                 GetDBStats();
-                exit(1);
+                return mergeRet;
             }
             auto appendIOEnd = std::chrono::high_resolution_clock::now();
             appendIOSeconds = std::chrono::duration_cast<std::chrono::microseconds>(appendIOEnd - appendIOBegin).count();
@@ -1491,6 +1502,13 @@ class ExtraDynamicSearcher {
     bool AllFinished() {
         return m_splitThreadPool->allClear() && m_reassignThreadPool->allClear();
     }
+
+    void GetJobCounts(int& splitQueue, int& splitRunning, int& reassignQueue, int& reassignRunning) {
+        splitQueue = static_cast<int>(m_splitThreadPool->jobsize());
+        splitRunning = static_cast<int>(m_splitThreadPool->runningJobs());
+        reassignQueue = static_cast<int>(m_reassignThreadPool->jobsize());
+        reassignRunning = static_cast<int>(m_reassignThreadPool->runningJobs());
+    }
     void ForceCompaction() {
         db->ForceCompaction();
     }
@@ -1537,7 +1555,7 @@ class ExtraDynamicSearcher {
 
     int m_postingSizeLimit = INT_MAX;
 
-    std::chrono::microseconds m_hardLatencyLimit = std::chrono::microseconds(2000);
+    std::chrono::microseconds m_hardLatencyLimit = std::chrono::microseconds::max();
 
     int m_mergeThreshold = 10;
 };
