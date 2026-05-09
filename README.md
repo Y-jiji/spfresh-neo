@@ -1,6 +1,6 @@
 # SPFresh-Neo
 
-A refactored and streamlined version of [SPFresh](https://github.com/SPFresh/SPFresh) — a SPANN-based approximate nearest neighbor search system with SPDK-backed SSD storage and dynamic index updates (split, merge, reassign).
+A streamlined version of [SPFresh](https://github.com/SPFresh/SPFresh) — a SPANN-based approximate nearest neighbor search system with SPDK-backed SSD storage and dynamic index updates (split, merge, reassign). Also removed some code that does not compile and merged some code from upstream SPTAG to avoid runtime panicking. 
 
 ## Building
 
